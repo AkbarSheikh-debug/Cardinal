@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Golden 01 - Budget Hatchback Buyer",
+    "utterances": ["I want to buy a hatchback, budget is 12000 euros, need it by 2026-03-01"]
+  },
+  {
+    "name": "Golden 02 - SUV Family",
+    "utterances": ["Looking to buy an suv for the family, budget 30000 euros, need it by 2026-04-15"]
+  },
+  {
+    "name": "Golden 03 - Rental Weekender",
+    "utterances": ["I'm looking to rent something", "a hatchback please", "budget is 3000 euros total, and I need it by 2026-02-20"]
+  },
+  {
+    "name": "Golden 04 - Electric Commuter",
+    "utterances": ["I want to buy an electric car, budget is 35000 euros, need it by 2026-05-10"]
+  },
+  {
+    "name": "Golden 05 - Sports Weekend Car",
+    "utterances": ["Buying a sports car, budget around 40000 euros, need it by 2026-06-01"]
+  },
+  {
+    "name": "Golden 06 - Wagon Roadtripper",
+    "utterances": ["I want to buy a wagon, my budget is 22000 euros, need it by 2026-03-20"]
+  },
+  {
+    "name": "Golden 07 - Luxury Buyer",
+    "utterances": ["Buying a luxury car, budget is 55000 euros, need it by 2026-07-01"]
+  },
+  {
+    "name": "Golden 08 - Pickup Tradesperson",
+    "utterances": ["I want to buy a pickup, budget 28000 euros, need it by 2026-04-01"]
+  },
+  {
+    "name": "Golden 09 - Convertible Summer Buy",
+    "utterances": ["Buying a convertible, budget is 32000 euros, need it by 2026-06-15"]
+  },
+  {
+    "name": "Golden 10 - City Hatchback Rental",
+    "utterances": ["I'm renting a hatchback for the city", "budget is 2500 euros total, need it by 2026-02-10"]
+  },
+  {
+    "name": "Golden 11 - Crossover Buyer",
+    "utterances": ["I want to buy a crossover, budget is 26000 euros, need it by 2026-05-01"]
+  },
+  {
+    "name": "Golden 12 - Sedan Commuter",
+    "utterances": ["Buying a sedan, budget around 18000 euros, need it by 2026-03-10"]
+  },
+  {
+    "name": "Golden 13 - Van Family Renter",
+    "utterances": ["I'm looking to rent a van", "budget is 5000 euros total, need it by 2026-04-20"]
+  },
+  {
+    "name": "Golden 14 - Coupe Enthusiast",
+    "utterances": ["I want to buy a coupe, budget is 34000 euros, need it by 2026-06-10"]
+  },
+  {
+    "name": "Golden 15 - Electric Renter",
+    "utterances": ["I'm looking to rent an electric car", "budget is 4500 euros total, need it by 2026-03-25"]
+  },
+  {
+    "name": "Golden 16 - Luxury Renter",
+    "utterances": ["Renting a luxury car for a trip", "budget is 6000 euros total, need it by 2026-05-15"]
+  },
+  {
+    "name": "Golden 17 - SUV Renter",
+    "utterances": ["I want to rent an suv", "budget is 4000 euros total, need it by 2026-04-05"]
+  },
+  {
+    "name": "Golden 18 - Wagon Buyer Tight Budget",
+    "utterances": ["Buying a wagon, budget is 15000 euros, need it by 2026-02-28"]
+  },
+  {
+    "name": "Golden 19 - Hatchback Buyer Later Date",
+    "utterances": ["I want to buy a hatchback, budget is 16000 euros, need it by 2026-08-01"]
+  },
+  {
+    "name": "Golden 20 - Pickup Renter",
+    "utterances": ["I'm renting a pickup truck", "budget is 5500 euros total, need it by 2026-06-20"]
+  }
+]

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cardinal -- MCP App host proxy</title>
+    <!--
+      Same origin as the host page (PHASE-7 SS5.1's "outer iframe"), but its own document with
+      its own minimal CSP -- this page's only job is relaying JSON-RPC and calling our own
+      /mcp-apps/*/rpc endpoint, so it never needs the broader script/style/connect allowances the
+      main React app does.
+    -->
+    <!--
+      frame-src is broader than the rest of this policy on purpose: the sandbox origin differs
+      between dev (localhost/127.0.0.1, PHASE-7 SS5.1's own dev convention) and a real deploy
+      (a real registrable domain, e.g. sandbox.cardinal.app), and this document has no way to
+      run injected script that could exploit a wide frame-src -- default-src 'none' +
+      script-src 'self' already keep anything but our own trusted outerEntry.ts from ever
+      calling document.createElement('iframe') here. `https://*` (not a specific host) is a
+      placeholder for "not deployed yet"; a real prod deploy should narrow this to the actual
+      sandbox domain -- CSP wildcards only support a *leading* `*.`, never a trailing one, so
+      `https://sandbox.*` (an earlier draft of this line) is not valid syntax and is silently
+      dropped by the browser rather than erroring, which is worth knowing before debugging a
+      "why won't this iframe load" that's actually a typo'd CSP source.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; frame-src http://localhost:* http://127.0.0.1:* https://*;"
+    />
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <script type="module" src="/src/mcp-host/outerEntry.ts"></script>
+  </body>
+</html>

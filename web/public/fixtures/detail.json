@@ -1,0 +1,56 @@
+[
+  {
+    "version": "v0.9",
+    "createSurface": {
+      "surfaceId": "golden-fixture-session:detail",
+      "catalogId": "cardinal.dev:carCatalog"
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateComponents": {
+      "surfaceId": "golden-fixture-session:detail",
+      "components": [
+        {
+          "id": "root",
+          "component": "Card",
+          "child": "detail-body"
+        },
+        {
+          "id": "detail-body",
+          "component": "Column",
+          "children": [
+            "detail-headline",
+            "detail-price",
+            "detail-powertrain"
+          ]
+        },
+        {
+          "id": "detail-headline",
+          "component": "Text",
+          "text": "2022 Toyota GR86 6MT",
+          "variant": "h3"
+        },
+        {
+          "id": "detail-price",
+          "component": "Text",
+          "text": "EUR 28,500"
+        },
+        {
+          "id": "detail-powertrain",
+          "component": "PowertrainExplainer",
+          "archetype": "i4_na",
+          "modelSrc": "/models/powertrain/i4_na.glb",
+          "posterSrc": "/models/powertrain/i4_na.png",
+          "annotations": [
+            {
+              "hotspot": "timing",
+              "label": "Chain",
+              "text": "Chain-driven timing; no belt service."
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

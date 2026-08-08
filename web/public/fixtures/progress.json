@@ -1,0 +1,43 @@
+[
+  {
+    "version": "v0.9",
+    "createSurface": {
+      "surfaceId": "golden-fixture-session:progress",
+      "catalogId": "cardinal.dev:carCatalog"
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateComponents": {
+      "surfaceId": "golden-fixture-session:progress",
+      "components": [
+        {
+          "id": "root",
+          "component": "InterviewProgress",
+          "slots": [
+            {
+              "name": "goal",
+              "status": "filled"
+            },
+            {
+              "name": "category",
+              "status": "filled"
+            },
+            {
+              "name": "budget",
+              "status": "open"
+            },
+            {
+              "name": "target_date",
+              "status": "open"
+            }
+          ],
+          "phase": "interview",
+          "reasoningTrace": [
+            "Asked about budget range."
+          ]
+        }
+      ]
+    }
+  }
+]

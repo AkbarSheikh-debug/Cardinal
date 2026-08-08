@@ -1,0 +1,49 @@
+[
+  {
+    "version": "v0.9",
+    "createSurface": {
+      "surfaceId": "golden-fixture-session:tco",
+      "catalogId": "cardinal.dev:carCatalog"
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateComponents": {
+      "surfaceId": "golden-fixture-session:tco",
+      "components": [
+        {
+          "id": "root",
+          "component": "TcoChart",
+          "series": [
+            {
+              "source": "mock_autobazaar",
+              "sourceId": "AB-1073",
+              "path": "buy",
+              "total": 20000.0,
+              "lines": [
+                {
+                  "kind": "purchase",
+                  "amountEur": 20000.0,
+                  "note": ""
+                }
+              ]
+            },
+            {
+              "source": "mock_autobazaar",
+              "sourceId": "AB-1073",
+              "path": "rent",
+              "total": 6000.0,
+              "lines": [
+                {
+                  "kind": "rental",
+                  "amountEur": 6000.0,
+                  "note": ""
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

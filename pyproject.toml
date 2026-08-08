@@ -1,0 +1,99 @@
+[project]
+name = "cardinal"
+version = "0.1.0"
+description = "A multistep agent that interviews a car buyer, researches marketplaces, and defends its recommendations."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.9",
+    "pydantic-settings>=2.4",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
+    "mcp>=1.29",
+    "claude-agent-sdk>=0.2.132",
+    "opentelemetry-api>=1.44",
+    "opentelemetry-sdk>=1.44",
+    "opentelemetry-exporter-otlp-proto-http>=1.44",
+    "openinference-instrumentation-claude-agent-sdk>=0.1.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+# setuptools only bundles .py files into an installed package by default -- everything else
+# under src/ (the two MCP App resource HTML files booking-mcp serves, PHASE-7 SS4) silently
+# didn't ship in the Docker image's `pip install .`, so `read_resource` 404'd with a bare
+# `[Errno 2] No such file or directory` the moment any view actually opened the booking form
+# (D-057; never caught before because no gate installs the package -- every gate runs from
+# the source checkout, where the files are just sitting on disk regardless of this setting).
+[tool.setuptools.package-data]
+"src.mcp.booking" = ["static/*.html"]
+
+# ---------------------------------------------------------------------------
+# Lint
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "TID", "ASYNC", "RUF"]
+
+[tool.ruff.lint.isort]
+# Without this, `src.*` lands in the third-party block next to pytest.
+known-first-party = ["src", "scripts", "tests"]
+
+# CONSTITUTION II.1. Mirrored by tests/test_layer_boundary.py -- deliberately both:
+# the lint rule catches it while you type, the test catches it when someone adds a `# noqa`.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"fastapi".msg = "src/domain, src/adapters and src/agent must never import fastapi (CONSTITUTION II.1)."
+
+[tool.ruff.lint.per-file-ignores]
+"src/api/*" = ["TID251"]
+"tests/*" = ["TID251"]
+"scripts/*" = ["TID251"]
+
+# ---------------------------------------------------------------------------
+# Types
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+
+# PHASE-0 §9: strict on domain and agent only; standard elsewhere, so `make verify`
+# stays fast enough to actually be run every session.
+[[tool.mypy.overrides]]
+module = ["src.domain.*", "src.agent.*"]
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+strict_equality = true
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "postgres: requires a live Postgres (skipped when CARDINAL_DATABASE_URL is unset)",
+]

@@ -1,0 +1,43 @@
+[
+  {
+    "version": "v0.9",
+    "createSurface": {
+      "surfaceId": "golden-fixture-session:results",
+      "catalogId": "cardinal.dev:carCatalog"
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateComponents": {
+      "surfaceId": "golden-fixture-session:results",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "card-0",
+            "card-1"
+          ]
+        },
+        {
+          "id": "card-0",
+          "component": "CarCard",
+          "source": "mock_autobazaar",
+          "sourceId": "AB-1073",
+          "rank": 1,
+          "score": 0.87,
+          "rationale": "Holds 80% of its value over the pricing horizon."
+        },
+        {
+          "id": "card-1",
+          "component": "CarCard",
+          "source": "mock_drivenow",
+          "sourceId": "DN-0421",
+          "rank": 2,
+          "score": 0.79,
+          "rationale": "Priced within the stated budget with low mileage."
+        }
+      ]
+    }
+  }
+]

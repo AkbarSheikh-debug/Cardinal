@@ -1,0 +1,97 @@
+name: cardinal
+
+services:
+  postgres:
+    # pgvector's image is plain Postgres plus the extension, so the [SCALE] semantic-search
+    # work needs no second container and no image swap later.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: cardinal
+      POSTGRES_PASSWORD: cardinal
+      POSTGRES_DB: cardinal
+    ports:
+      - "5432:5432"
+    volumes:
+      - cardinal_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # api and booking both wait on this, so a cold `docker compose up` on a clean clone
+      # migrates and seeds against a ready database instead of racing it.
+      test: ["CMD-SHELL", "pg_isready -U cardinal -d cardinal"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # booking-mcp's standalone HTTP transport (PHASE-2), its own compose service on its own
+  # hostname (PHASE-11 SS3): "a second port on the same host is not a different origin," and a
+  # slow or compromised marketplace call should never be able to take checkout down with it
+  # (src/mcp/booking/http.py's own docstring). Reached only by `api`, server-side, over the
+  # compose network -- no host port is published, so nothing outside this network can reach it
+  # (CONSTITUTION II.5: MCP App views are proxied through the host, never direct).
+  booking:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      BOOKING_MCP_HTTP_HOST: "0.0.0.0"
+      BOOKING_MCP_HTTP_PORT: "8100"
+    command: ["python", "-m", "src.mcp.booking.http"]
+    healthcheck:
+      # No HTTP health route exists on this transport -- it only mounts /mcp (a JSON-RPC POST
+      # endpoint, not a cheap GET). A TCP connect is enough to know uvicorn is accepting.
+      test: ["CMD-SHELL", "python -c \"import socket; socket.create_connection(('localhost', 8100), timeout=3)\""]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      CARDINAL_DATABASE_URL: postgresql+psycopg://cardinal:cardinal@postgres:5432/cardinal
+      # Trailing slash matters: `Mount("/mcp", ...)` (src/mcp/booking/http.py) 307-redirects
+      # a bare /mcp to /mcp/, and that extra round-trip is what produced an intermittent
+      # "unhandled errors in a TaskGroup" from the MCP client on `resources/read` (D-057) --
+      # pointing straight at the mount's real path skips the redirect instead of relying on
+      # the client to survive it.
+      CARDINAL_BOOKING_MCP_URL: http://booking:8100/mcp/
+      # DEMO_MODE/ANTHROPIC_API_KEY/LANGFUSE_* are intentionally not set here -- `docker compose
+      # up` with a bare `.env` (copied from `.env.example`) must boot straight into DEMO_MODE
+      # (CONSTITUTION III.7); `env_file` below is what actually supplies them.
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      booking:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head
+      && python -m scripts.seed_marketplace --if-empty
+      && uvicorn src.api.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      # Same probe the Dockerfile bakes in, with more start-up slack -- this service's
+      # `command` runs migrations and the 240-row seed *before* uvicorn ever binds :8000,
+      # which the image's own default --start-period doesn't know to account for.
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      start_period: 40s
+      retries: 15
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "5173:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  cardinal_pgdata:

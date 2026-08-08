@@ -1,0 +1,29 @@
+[
+  {
+    "version": "v0.9",
+    "createSurface": {
+      "surfaceId": "golden-fixture-session:tco",
+      "catalogId": "cardinal.dev:carCatalog"
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateComponents": {
+      "surfaceId": "golden-fixture-session:tco",
+      "components": [
+        {
+          "id": "root",
+          "component": "TcoChart",
+          "series": [
+            {
+              "source": "mock_autobazaar",
+              "sourceId": "AB-1073",
+              "totalCostEur": 32000.0
+            }
+          ],
+          "breakEvenMonth": 5
+        }
+      ]
+    }
+  }
+]

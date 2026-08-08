@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Checkout</title>
+    <style>
+      :root {
+        --color-text-primary: #1a1a1a;
+        --color-surface: #ffffff;
+        --color-border: #d0d0d0;
+        --color-accent: #2f6fed;
+        --color-mock: #b34700;
+        --color-mock-bg: #fff3e6;
+        --color-authorize: #4ade9b;
+        --color-authorize-deep: #16a34a;
+        --color-authorize-shadow: #0f3d26;
+      }
+      html[data-theme="dark"] {
+        --color-text-primary: #e8ede9;
+        --color-surface: #1a1a1a;
+        --color-border: #3a3a3a;
+        --color-accent: #6ea1ff;
+        --color-mock: #ffb066;
+        --color-mock-bg: #3a2200;
+        --color-authorize: #4ade9b;
+        --color-authorize-deep: #16a34a;
+        --color-authorize-shadow: #0a2618;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 0 16px 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--color-text-primary);
+        background: var(--color-surface);
+      }
+      /* CONSTITUTION I.5 / gate 8.10: unconditional, above the fold -- the very first thing
+         in the document, never gated behind the loading/ready toggle below. */
+      #mock-banner {
+        margin: 0 -16px 16px;
+        padding: 10px 16px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-align: center;
+        color: var(--color-mock);
+        background: var(--color-mock-bg);
+        border-bottom: 1px solid var(--color-mock);
+      }
+      h1 { font-size: 16px; margin: 12px 0 4px; }
+      .summary { font-size: 13px; opacity: 0.8; margin-bottom: 16px; }
+      .summary .total { font-size: 20px; font-weight: 700; opacity: 1; display: block; margin-top: 4px; }
+      fieldset { border: 1px solid var(--color-border); border-radius: 8px; margin: 0 0 16px; padding: 12px; }
+      legend { font-size: 12px; font-weight: 600; padding: 0 4px; }
+      label { display: block; font-size: 12px; margin: 10px 0 4px; }
+      input[type="text"], input[type="range"] {
+        width: 100%;
+        padding: 8px;
+        font-size: 14px;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        background: var(--color-surface);
+        color: var(--color-text-primary);
+      }
+      .row { display: flex; gap: 12px; }
+      .row > div { flex: 1; }
+      .slider-value { font-size: 12px; opacity: 0.75; }
+      .financing-monthly { font-size: 15px; font-weight: 700; margin-top: 8px; }
+      /* CONSTITUTION I.2's trust anchor: this is the one click in the whole product that can
+         complete a payment, and no agent code anywhere can perform it (gate 8.3/8.4) -- styled
+         like a piece of hardware you commit to, not a form button you tab past. */
+      button[type="submit"] {
+        position: relative;
+        margin-top: 12px;
+        width: 100%;
+        padding: 15px;
+        font-family: "SF Mono", "Consolas", "Menlo", monospace;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #eafff5;
+        background: linear-gradient(180deg, var(--color-authorize), var(--color-authorize-deep));
+        border: 1px solid var(--color-authorize-shadow);
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow:
+          0 3px 0 var(--color-authorize-shadow),
+          0 6px 14px rgb(0 0 0 / 0.25),
+          inset 0 1px 0 rgb(255 255 255 / 0.2);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      /* A faint ring breathing behind the button while it waits to be pressed -- idle, not
+         urging; it stops the moment the button is disabled (mid-submit or already confirmed). */
+      button[type="submit"]:not(:disabled)::before {
+        content: "";
+        position: absolute;
+        inset: -5px;
+        border-radius: 12px;
+        border: 1px solid rgb(74 222 155 / 0.4);
+        opacity: 0;
+        pointer-events: none;
+        animation: authorize-ring 2.4s ease-in-out infinite;
+      }
+      @keyframes authorize-ring {
+        0%, 100% { opacity: 0; transform: scale(1); }
+        50% { opacity: 0.55; transform: scale(1.035); }
+      }
+      button[type="submit"]:hover:not(:disabled) {
+        transform: translateY(1px);
+        box-shadow:
+          0 2px 0 var(--color-authorize-shadow),
+          0 4px 10px rgb(0 0 0 / 0.22),
+          inset 0 1px 0 rgb(255 255 255 / 0.2);
+      }
+      button[type="submit"]:active:not(:disabled) {
+        transform: translateY(3px);
+        box-shadow:
+          0 0 0 var(--color-authorize-shadow),
+          0 2px 6px rgb(0 0 0 / 0.18),
+          inset 0 1px 0 rgb(255 255 255 / 0.12);
+      }
+      button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
+      /* Set once, by JS, the instant a real confirmation comes back (never a guess -- see the
+         `.then()` branch that adds this class only after `payload.outcome === "success"`): one
+         expanding ring, then it's done. */
+      button[type="submit"].confirmed::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 8px;
+        box-shadow: 0 0 0 0 rgb(74 222 155 / 0.65);
+        animation: authorize-confirmed 0.9s ease-out;
+      }
+      @keyframes authorize-confirmed {
+        from { box-shadow: 0 0 0 0 rgb(74 222 155 / 0.65); opacity: 1; }
+        to { box-shadow: 0 0 0 46px rgb(74 222 155 / 0); opacity: 0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        button[type="submit"]::before,
+        button[type="submit"].confirmed::after { animation: none; }
+      }
+      /* Every outcome gets its own always-distinguishable colour + label; "processing" is
+         never a terminal render (gate 8.6's "non-spinner UI state"). */
+      .status { margin-top: 12px; padding: 10px; border-radius: 6px; font-size: 13px; display: none; }
+      .status.visible { display: block; }
+      .status[data-outcome="processing"] { background: #eef2ff; color: #33415c; }
+      .status[data-outcome="success"] { background: #e6f6ea; color: #1a7f37; }
+      .status[data-outcome="declined_insufficient_funds"],
+      .status[data-outcome="declined_expired_card"] { background: #fdecea; color: #a41c1c; }
+      .status[data-outcome="gateway_error"] { background: #fff4e5; color: #8a4b00; }
+      .status[data-outcome="timeout"] { background: #f1eafd; color: #5a2ea6; }
+      .status[data-outcome="rejected"] { background: #fdecea; color: #a41c1c; }
+      #loading { font-size: 13px; opacity: 0.7; margin-top: 8px; }
+      #form-root { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="mock-banner" data-testid="mock-banner">MOCK &mdash; NO REAL PAYMENT</div>
+    <div id="loading">Loading checkout&hellip;</div>
+    <form id="form-root">
+      <h1>Checkout</h1>
+      <p class="summary" id="summary">
+        <span id="summary-line"></span>
+        <span class="total" id="summary-total"></span>
+      </p>
+
+      <fieldset id="financing-box" style="display: none;">
+        <legend>Financing (optional)</legend>
+        <label for="term">Term: <span class="slider-value" id="term-value"></span></label>
+        <input type="range" id="term" min="12" max="72" step="1" value="60" />
+        <label for="down">Down payment: <span class="slider-value" id="down-value"></span></label>
+        <input type="range" id="down" min="0" max="40" step="1" value="10" />
+        <label for="apr">APR: <span class="slider-value" id="apr-value"></span></label>
+        <input type="range" id="apr" min="0" max="15" step="0.1" value="6.9" />
+        <div class="financing-monthly" id="financing-monthly"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Card details (mock)</legend>
+        <label for="card_name">Name on card</label>
+        <input type="text" id="card_name" required />
+        <label for="card_number">Card number</label>
+        <input type="text" id="card_number" inputmode="numeric" placeholder="4242 4242 4242 4242" required />
+        <div class="row">
+          <div>
+            <label for="card_expiry">Expiry</label>
+            <input type="text" id="card_expiry" placeholder="MM/YY" required />
+          </div>
+          <div>
+            <label for="card_cvc">CVC</label>
+            <input type="text" id="card_cvc" placeholder="123" required />
+          </div>
+        </div>
+      </fieldset>
+
+      <button type="submit" id="pay-button">Authorize transaction</button>
+      <div class="status" id="status" data-outcome=""></div>
+    </form>
+
+    <script>
+      // Plain vanilla JS, no framework, no build step -- same discipline as booking_form.html.
+      // CONSTITUTION IV.2: the full card number is read here, inside the sandboxed iframe,
+      // and never leaves it -- mockTokenize() below reduces it to {last4, simulatedOutcome}
+      // client-side (the same thing a real card element's tokeniser does), and only that
+      // pair crosses to the server. See DECISIONS.md D-036.
+
+      var nextId = 1;
+      var pending = {};
+
+      function send(message) {
+        window.parent.postMessage(message, window.location.origin);
+      }
+
+      function request(method, params) {
+        var id = nextId++;
+        return new Promise(function (resolve, reject) {
+          pending[id] = { resolve: resolve, reject: reject };
+          send({ jsonrpc: "2.0", id: id, method: method, params: params });
+        });
+      }
+
+      function notify(method, params) {
+        send({ jsonrpc: "2.0", method: method, params: params });
+      }
+
+      var toolInput = null;
+      var isSubmitting = false;
+
+      function applyTheme(hostContext) {
+        document.documentElement.dataset.theme = hostContext.theme || "light";
+      }
+
+      // Mirrors src/adapters/payments/mock.py's CARD_OUTCOMES exactly (D-036) -- this is the
+      // *authoritative* copy at runtime, since the server never sees the number to look it up
+      // itself. tests/unit/test_adapters_payments.py pins the Python side; nothing currently
+      // executes this file's JS against that test, so a human diff is what keeps them in sync
+      // (the same honestly-manual discipline D-034 used for the two CSP tables).
+      var CARD_OUTCOMES = {
+        "4242424242424242": "success",
+        "4000000000000002": "declined_insufficient_funds",
+        "4000000000000069": "declined_expired_card",
+        "4000000000000119": "gateway_error",
+        "4000000000000127": "timeout",
+      };
+
+      function mockTokenize(rawNumber) {
+        var digits = String(rawNumber || "").replace(/\s+/g, "");
+        var last4 = digits.slice(-4).padStart(4, "0");
+        var outcome = CARD_OUTCOMES[digits] || "success";
+        return { last4: last4, simulatedOutcome: outcome };
+      }
+
+      // Mirrors src/domain/financing.py's compute_monthly_payment exactly (same formula,
+      // same rounding direction) -- PHASE-8 §7: "computed in the App for instant feedback,
+      // and re-computed server-side on submit." gate 8.11 proves the two agree to the cent.
+      function computeMonthlyPayment(priceAmount, termMonths, downPct, aprPct) {
+        var principal = priceAmount * (1 - downPct / 100);
+        var r = (aprPct / 100) / 12;
+        var monthly;
+        if (r === 0) {
+          monthly = principal / termMonths;
+        } else {
+          monthly = (principal * r) / (1 - Math.pow(1 + r, -termMonths));
+        }
+        return Math.round(monthly * 100) / 100;
+      }
+
+      function money(amount, currency) {
+        return (currency || "EUR") + " " + Number(amount).toFixed(2);
+      }
+
+      function currentFinancingTerms() {
+        return {
+          term_months: parseInt(document.getElementById("term").value, 10),
+          down_payment_pct: parseFloat(document.getElementById("down").value),
+          apr_pct: parseFloat(document.getElementById("apr").value),
+        };
+      }
+
+      function refreshFinancingDisplay() {
+        if (!toolInput || toolInput.offer_type !== "buy") return;
+        var terms = currentFinancingTerms();
+        document.getElementById("term-value").textContent = terms.term_months + " months";
+        document.getElementById("down-value").textContent = terms.down_payment_pct + "%";
+        document.getElementById("apr-value").textContent = terms.apr_pct + "% APR";
+        var monthly = computeMonthlyPayment(
+          Number(toolInput.total_amount), terms.term_months, terms.down_payment_pct, terms.apr_pct
+        );
+        document.getElementById("financing-monthly").textContent =
+          "Est. " + money(monthly, toolInput.total_currency) + " / month";
+      }
+
+      function applyPrefill(input) {
+        toolInput = input;
+        document.getElementById("summary-line").textContent =
+          (input.source_id || "?") + " via " + (input.source || "?") + " -- " + (input.offer_type || "buy");
+        document.getElementById("summary-total").textContent = money(input.total_amount, input.total_currency);
+
+        if (input.offer_type === "buy") {
+          document.getElementById("financing-box").style.display = "";
+          ["term", "down", "apr"].forEach(function (id) {
+            document.getElementById(id).addEventListener("input", refreshFinancingDisplay);
+          });
+          refreshFinancingDisplay();
+        }
+        if (input.customer_name) document.getElementById("card_name").value = input.customer_name;
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("form-root").style.display = "block";
+      }
+
+      function showStatus(outcome, text) {
+        var el = document.getElementById("status");
+        el.className = "status visible";
+        el.dataset.outcome = outcome;
+        el.textContent = text;
+      }
+
+      window.addEventListener("message", function (event) {
+        if (event.source !== window.parent || event.origin !== window.location.origin) return;
+        var message = event.data;
+        if (!message || message.jsonrpc !== "2.0") return;
+
+        if (typeof message.id === "number" && ("result" in message || "error" in message)) {
+          var settled = pending[message.id];
+          if (!settled) return;
+          delete pending[message.id];
+          if ("error" in message) settled.reject(new Error(message.error.message));
+          else settled.resolve(message.result);
+          return;
+        }
+
+        if (message.method === "ui/notifications/tool-input") {
+          applyPrefill(message.params.toolInput || {});
+        }
+      });
+
+      document.addEventListener("securitypolicyviolation", function (event) {
+        notify("notifications/message", {
+          blocked: true,
+          blockedUri: event.blockedURI,
+          violatedDirective: event.violatedDirective,
+        });
+      });
+
+      document.getElementById("form-root").addEventListener("submit", function (event) {
+        event.preventDefault();
+        // Debounce a genuine double-click/double-submit of *this* click client-side; the
+        // server-side idempotency key (generated fresh below, PHASE-8 §6) is the backstop for
+        // whatever this guard misses -- a network retry of the same in-flight request, say.
+        if (isSubmitting) return;
+        if (!event.isTrusted) {
+          showStatus("rejected", "This action must come from a real click.");
+          return;
+        }
+        isSubmitting = true;
+
+        var payButton = document.getElementById("pay-button");
+        payButton.disabled = true;
+        showStatus("processing", "Processing payment…");
+
+        var idempotencyKey = "confirm-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+        var payment = mockTokenize(document.getElementById("card_number").value);
+        var financing = toolInput && toolInput.offer_type === "buy" ? currentFinancingTerms() : null;
+
+        request("tools/call", { name: "mint_gesture_token", arguments: { booking_draft_id: toolInput.booking_draft_id } })
+          .then(function (mintResult) {
+            if (mintResult && mintResult.isError) {
+              throw new Error((mintResult.content && mintResult.content[0] && mintResult.content[0].text) || "could not start checkout");
+            }
+            var token = JSON.parse(mintResult.content[0].text).gesture_token;
+            return request("tools/call", {
+              name: "confirm_booking",
+              arguments: {
+                booking_draft_id: toolInput.booking_draft_id,
+                gesture_token: token,
+                idempotency_key: idempotencyKey,
+                payment_method: { last4: payment.last4, simulated_outcome: payment.simulatedOutcome },
+                financing: financing,
+              },
+            });
+          })
+          .then(function (confirmResult) {
+            if (confirmResult && confirmResult.isError) {
+              throw new Error((confirmResult.content && confirmResult.content[0] && confirmResult.content[0].text) || "confirmation failed");
+            }
+            var payload = JSON.parse(confirmResult.content[0].text);
+            isSubmitting = false;
+            if (payload.outcome === "success") {
+              showStatus("success", "Booking confirmed: " + payload.booking_id);
+              payButton.disabled = true;
+              payButton.classList.add("confirmed");
+            } else {
+              showStatus(payload.outcome, payload.message || "Payment was not completed.");
+              payButton.disabled = false;
+            }
+            if (payload.server_monthly_payment_eur !== undefined && payload.server_monthly_payment_eur !== null) {
+              document.getElementById("financing-monthly").dataset.serverMonthly = payload.server_monthly_payment_eur;
+            }
+            request("ui/message", { text: "Checkout " + payload.outcome + " for " + toolInput.source_id }).catch(function () {});
+          })
+          .catch(function (err) {
+            isSubmitting = false;
+            showStatus("gateway_error", "Could not confirm: " + err.message);
+            payButton.disabled = false;
+          });
+      });
+
+      request("ui/initialize", { appCapabilities: { availableDisplayModes: ["inline"] } }).then(function (result) {
+        applyTheme(result.hostContext);
+      });
+    </script>
+  </body>
+</html>

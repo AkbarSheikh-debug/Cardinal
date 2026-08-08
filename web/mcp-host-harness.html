@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cardinal -- MCP App host harness</title>
+  </head>
+  <body>
+    <!--
+      Gate 7's target: mounts McpAppHost directly, driven by query params, against a real
+      running src.api.main:app + booking-mcp HTTP server -- no live agent session, no SSE, the
+      same isolation gate 6.2's harness.html uses for A2UI fixtures.
+    -->
+    <div id="root"></div>
+    <script type="module" src="/src/dev/mcp-host-harness.tsx"></script>
+  </body>
+</html>

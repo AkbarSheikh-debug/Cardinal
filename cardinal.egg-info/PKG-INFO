@@ -1,0 +1,24 @@
+Metadata-Version: 2.4
+Name: cardinal
+Version: 0.1.0
+Summary: A multistep agent that interviews a car buyer, researches marketplaces, and defends its recommendations.
+Requires-Python: >=3.12
+Requires-Dist: pydantic>=2.9
+Requires-Dist: pydantic-settings>=2.4
+Requires-Dist: fastapi>=0.111
+Requires-Dist: uvicorn[standard]>=0.29
+Requires-Dist: sqlalchemy>=2.0.30
+Requires-Dist: alembic>=1.13
+Requires-Dist: psycopg[binary]>=3.2
+Requires-Dist: pgvector>=0.3
+Requires-Dist: mcp>=1.29
+Requires-Dist: claude-agent-sdk>=0.2.132
+Requires-Dist: opentelemetry-api>=1.44
+Requires-Dist: opentelemetry-sdk>=1.44
+Requires-Dist: opentelemetry-exporter-otlp-proto-http>=1.44
+Requires-Dist: openinference-instrumentation-claude-agent-sdk>=0.1.9
+Provides-Extra: dev
+Requires-Dist: pytest>=8.2; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+Requires-Dist: mypy>=1.11; extra == "dev"

@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Efficient Erik",
+    "utterances": [
+      "I want to buy a suv, my budget is 25000 euros, need it by 2026-09-15"
+    ],
+    "mid_recommend_utterance": "Actually, make it under 15000 euros"
+  },
+  {
+    "name": "Renting Rita",
+    "utterances": [
+      "I'm looking to rent something",
+      "a hatchback please",
+      "budget is 4000 euros total, and I need it by 2026-10-01"
+    ]
+  },
+  {
+    "name": "Family Fatima",
+    "utterances": [
+      "we need a family car",
+      "we're planning to buy, not rent",
+      "budget is 30000 euros",
+      "we must be ready by 2026-08-30"
+    ]
+  },
+  {
+    "name": "Sports Sam",
+    "utterances": [
+      "I want to buy a sports car, under 45000 euros",
+      "need it by 2026-12-01"
+    ]
+  },
+  {
+    "name": "Electric Emma",
+    "utterances": [
+      "I'd like to rent an electric car",
+      "budget up to 4500 euros",
+      "by 2026-09-01"
+    ]
+  },
+  {
+    "name": "Wagon Will",
+    "utterances": [
+      "buy",
+      "a wagon",
+      "budget is 18000 euros",
+      "I need it by 2026-11-15"
+    ]
+  },
+  {
+    "name": "Luxury Liam",
+    "utterances": [
+      "I want to buy a luxury car, budget is 90000 euros, need it by 2026-09-20"
+    ]
+  },
+  {
+    "name": "Pickup Priya",
+    "utterances": [
+      "I want to buy a pickup truck",
+      "budget around 35000 euros",
+      "by 2026-10-10"
+    ]
+  },
+  {
+    "name": "Convertible Carlos",
+    "utterances": [
+      "I'd like to rent a convertible",
+      "budget is 6000 euros",
+      "need it by 2026-08-25"
+    ]
+  },
+  {
+    "name": "City Chloe",
+    "utterances": [
+      "I want to buy a city car",
+      "budget is under 15000 euros",
+      "by 2026-09-05"
+    ]
+  }
+]

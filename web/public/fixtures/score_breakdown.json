@@ -1,0 +1,37 @@
+[
+  {
+    "version": "v0.9",
+    "createSurface": {
+      "surfaceId": "golden-fixture-session:score_breakdown",
+      "catalogId": "cardinal.dev:carCatalog"
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateComponents": {
+      "surfaceId": "golden-fixture-session:score_breakdown",
+      "components": [
+        {
+          "id": "root",
+          "component": "ScoreBreakdown",
+          "source": "mock_autobazaar",
+          "sourceId": "AB-1073",
+          "criteria": [
+            {
+              "name": "budget_fit",
+              "weight": 0.25,
+              "value": 0.9,
+              "contribution": 0.225
+            },
+            {
+              "name": "resale_strength",
+              "weight": 0.3,
+              "value": 0.8,
+              "contribution": 0.24
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

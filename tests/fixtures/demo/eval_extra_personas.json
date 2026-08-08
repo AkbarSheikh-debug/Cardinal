@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Extra 01 - Backward Transition Ben",
+    "utterances": ["I want to buy an suv, budget is 30000 euros, need it by 2026-05-01"],
+    "mid_recommend_utterance": "Actually, make it under 12000 euros"
+  },
+  {
+    "name": "Extra 02 - Backward Transition Beatriz",
+    "utterances": ["I'm renting a hatchback, budget is 3000 euros total, need it by 2026-03-01"],
+    "mid_recommend_utterance": "Actually, I want a van instead"
+  },
+  {
+    "name": "Extra 03 - Backward Transition Bram",
+    "utterances": ["I want to buy a sedan, budget is 25000 euros, need it by 2026-04-01"],
+    "mid_recommend_utterance": "Actually, make it a coupe"
+  },
+  {
+    "name": "Extra 04 - Zero Result Zoe",
+    "utterances": ["I want to buy a hatchback, budget is 500 euros, need it by 2026-03-01"],
+    "expect_infeasible": true
+  },
+  {
+    "name": "Extra 05 - Zero Result Zach",
+    "utterances": ["I want to buy a luxury car, budget is 800 euros, need it by 2026-04-01"],
+    "expect_infeasible": true
+  },
+  {
+    "name": "Extra 06 - Zero Result Zara",
+    "utterances": ["I want to buy an electric car, budget is 1000 euros, need it by 2026-03-15"],
+    "expect_infeasible": true
+  },
+  {
+    "name": "Extra 07 - Decline Dana",
+    "utterances": ["I want to buy a crossover, budget is 26000 euros, need it by 2026-05-01"],
+    "decline_at_checkout": true
+  },
+  {
+    "name": "Extra 08 - Decline Deniz",
+    "utterances": ["I'm renting a van, budget is 4000 euros total, need it by 2026-04-01"],
+    "decline_at_checkout": true
+  },
+  {
+    "name": "Extra 09 - Coverage Coen",
+    "utterances": ["I want to buy a wagon, budget is 24000 euros, need it by 2026-06-01"]
+  },
+  {
+    "name": "Extra 10 - Coverage Priyanka",
+    "utterances": ["I'm renting a sports car, budget is 5000 euros total, need it by 2026-05-01"]
+  }
+]

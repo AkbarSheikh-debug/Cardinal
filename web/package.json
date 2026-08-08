@@ -1,0 +1,33 @@
+{
+  "name": "cardinal-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Vite + React A2UI renderer + MCP App host (PLAN-00 SS2). Chat rail is plain React; the canvas is agent-composed, catalog-validated A2UI (PHASE-6).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "typecheck": "tsc -b --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "overrides": {
+    "@a2ui/web_core": "0.9.1"
+  },
+  "dependencies": {
+    "@a2ui/react": "0.9.1",
+    "@a2ui/web_core": "0.9.1",
+    "@google/model-viewer": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.0"
+  }
+}

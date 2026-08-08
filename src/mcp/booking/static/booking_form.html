@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Booking form</title>
+    <style>
+      :root {
+        --color-text-primary: #1a1a1a;
+        --color-surface: #ffffff;
+        --color-border: #d0d0d0;
+        --color-accent: #2f6fed;
+      }
+      html[data-theme="dark"] {
+        --color-text-primary: #e8ede9;
+        --color-surface: #1a1a1a;
+        --color-border: #3a3a3a;
+        --color-accent: #6ea1ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--color-text-primary);
+        background: var(--color-surface);
+      }
+      h1 { font-size: 16px; margin: 0 0 4px; }
+      .summary { font-size: 13px; opacity: 0.75; margin-bottom: 16px; }
+      label { display: block; font-size: 12px; margin: 12px 0 4px; }
+      input[type="text"], input[type="email"], input[type="tel"], input[type="date"] {
+        width: 100%;
+        padding: 8px;
+        font-size: 14px;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        background: var(--color-surface);
+        color: var(--color-text-primary);
+      }
+      input.prefilled { border-style: dashed; border-color: var(--color-accent); }
+      .addon { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0; }
+      .row { display: flex; gap: 12px; }
+      .row > div { flex: 1; }
+      button[type="submit"] {
+        margin-top: 18px;
+        width: 100%;
+        padding: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--color-accent);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
+      .status { margin-top: 12px; font-size: 13px; }
+      .status.error { color: #d33; }
+      .status.success { color: #1a7f37; }
+      #loading { font-size: 13px; opacity: 0.7; }
+      #form-root { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="loading">Loading booking form…</div>
+    <form id="form-root">
+      <h1>Booking details</h1>
+      <p class="summary" id="summary"></p>
+
+      <label for="name">Full name</label>
+      <input type="text" id="name" required />
+
+      <div class="row">
+        <div>
+          <label for="email">Email</label>
+          <input type="email" id="email" required />
+        </div>
+        <div>
+          <label for="phone">Phone</label>
+          <input type="tel" id="phone" />
+        </div>
+      </div>
+
+      <div class="row" id="dates-row">
+        <div>
+          <label for="window_start" id="window_start_label">Collection date</label>
+          <input type="date" id="window_start" />
+        </div>
+        <div id="window_end_wrap">
+          <label for="window_end">Return date</label>
+          <input type="date" id="window_end" />
+        </div>
+      </div>
+
+      <label for="collection_location">Collection location</label>
+      <input type="text" id="collection_location" placeholder="City or branch" required />
+
+      <label>Add-ons</label>
+      <div class="addon"><input type="checkbox" id="addon_insurance" /><label for="addon_insurance" style="margin:0;">Extra insurance</label></div>
+      <div class="addon"><input type="checkbox" id="addon_delivery" /><label for="addon_delivery" style="margin:0;">Home delivery</label></div>
+      <div class="addon"><input type="checkbox" id="addon_warranty" /><label for="addon_warranty" style="margin:0;">Extended warranty</label></div>
+
+      <button type="submit" id="submit-button">Submit booking draft</button>
+      <div class="status" id="status"></div>
+    </form>
+
+    <script>
+      // Plain vanilla JS, no framework, no build step, no external requests -- required by
+      // this resource's CSP (connect-src 'none') and by PHASE-7 §6's own description of what
+      // an MCP App booking form is allowed to be.
+
+      var nextId = 1;
+      var pending = {};
+
+      function send(message) {
+        window.parent.postMessage(message, window.location.origin);
+      }
+
+      function request(method, params) {
+        var id = nextId++;
+        return new Promise(function (resolve, reject) {
+          pending[id] = { resolve: resolve, reject: reject };
+          send({ jsonrpc: "2.0", id: id, method: method, params: params });
+        });
+      }
+
+      function notify(method, params) {
+        send({ jsonrpc: "2.0", method: method, params: params });
+      }
+
+      var toolInput = null;
+      var bookingDraftId =
+        (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + "-" + Math.random();
+
+      function applyTheme(hostContext) {
+        document.documentElement.dataset.theme = hostContext.theme || "light";
+      }
+
+      function applyPrefill(input) {
+        var summary = document.getElementById("summary");
+        summary.textContent =
+          "Booking " + (input.source_id || "?") + " via " + (input.source || "?") + " -- " + (input.offer_type || "buy");
+
+        var isRent = input.offer_type === "rent";
+        document.getElementById("window_start_label").textContent = isRent ? "Collection date" : "Preferred date";
+        document.getElementById("window_end_wrap").style.display = isRent ? "" : "none";
+
+        if (input.window_start) {
+          var startEl = document.getElementById("window_start");
+          startEl.value = input.window_start;
+          startEl.classList.add("prefilled");
+        }
+        if (input.window_end && isRent) {
+          var endEl = document.getElementById("window_end");
+          endEl.value = input.window_end;
+          endEl.classList.add("prefilled");
+        }
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("form-root").style.display = "block";
+      }
+
+      window.addEventListener("message", function (event) {
+        if (event.source !== window.parent || event.origin !== window.location.origin) return;
+        var message = event.data;
+        if (!message || message.jsonrpc !== "2.0") return;
+
+        if (typeof message.id === "number" && ("result" in message || "error" in message)) {
+          var settled = pending[message.id];
+          if (!settled) return;
+          delete pending[message.id];
+          if ("error" in message) settled.reject(new Error(message.error.message));
+          else settled.resolve(message.result);
+          return;
+        }
+
+        if (message.method === "ui/notifications/tool-input") {
+          toolInput = message.params.toolInput || {};
+          applyPrefill(toolInput);
+        }
+      });
+
+      // Gate 7.3/7.10: connect-src 'none' makes a stray fetch() fail client-side, where our
+      // server-side audit log would otherwise never learn it happened. The browser fires this
+      // event on every CSP violation regardless of directive; reporting it up is what turns
+      // "silently didn't work" into an auditable, expected outcome.
+      document.addEventListener("securitypolicyviolation", function (event) {
+        notify("notifications/message", {
+          blocked: true,
+          blockedUri: event.blockedURI,
+          violatedDirective: event.violatedDirective,
+        });
+      });
+
+      document.getElementById("window_start").addEventListener("change", function (event) {
+        notify("notifications/message", { level: "info", data: "collection date changed" });
+        request("ui/message", { text: "Collection date changed to " + event.target.value }).catch(function () {});
+      });
+
+      document.getElementById("form-root").addEventListener("submit", function (event) {
+        event.preventDefault();
+        var statusEl = document.getElementById("status");
+        var submitButton = document.getElementById("submit-button");
+        submitButton.disabled = true;
+        statusEl.className = "status";
+        statusEl.textContent = "Submitting…";
+
+        var formFields = {
+          // Echoed back from the tool-input this form was opened with (PHASE-8 §7) --
+          // open_checkout has no other way to know which listing a submitted draft prices,
+          // since submit_booking_draft's own schema only ever carried the human-entered
+          // fields (PHASE-2/PHASE-7). The listing reference isn't something the user typed,
+          // so it isn't user input to re-validate here; it's carried through unchanged.
+          source: toolInput ? toolInput.source : undefined,
+          source_id: toolInput ? toolInput.source_id : undefined,
+          offer_type: toolInput ? toolInput.offer_type : undefined,
+          name: document.getElementById("name").value,
+          email: document.getElementById("email").value,
+          phone: document.getElementById("phone").value,
+          collection_location: document.getElementById("collection_location").value,
+          window_start: document.getElementById("window_start").value,
+          window_end: document.getElementById("window_end").value,
+          addons: [
+            document.getElementById("addon_insurance").checked ? "insurance" : null,
+            document.getElementById("addon_delivery").checked ? "delivery" : null,
+            document.getElementById("addon_warranty").checked ? "warranty" : null,
+          ].filter(Boolean),
+        };
+
+        request("tools/call", {
+          name: "submit_booking_draft",
+          arguments: { booking_draft_id: bookingDraftId, form_fields: formFields },
+        })
+          .then(function (result) {
+            if (result && result.isError) {
+              throw new Error((result.content && result.content[0] && result.content[0].text) || "submission failed");
+            }
+            statusEl.className = "status success";
+            statusEl.textContent = "Booking draft submitted.";
+            request("ui/message", { text: "Booking draft submitted for " + (toolInput ? toolInput.source_id : "this listing") }).catch(
+              function () {}
+            );
+          })
+          .catch(function (err) {
+            statusEl.className = "status error";
+            statusEl.textContent = "Could not submit: " + err.message;
+            submitButton.disabled = false;
+          });
+      });
+
+      request("ui/initialize", { appCapabilities: { availableDisplayModes: ["inline"] } }).then(function (result) {
+        applyTheme(result.hostContext);
+        // The form stays hidden until tool-input arrives (handshake race, PHASE-7 §8's risk
+        // table) -- initialize completing only means the host is listening, not that this
+        // view has anything to show yet.
+      });
+    </script>
+  </body>
+</html>

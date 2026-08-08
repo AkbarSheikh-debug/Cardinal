@@ -1,0 +1,14 @@
+.venv/
+.git/
+.omni/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+plans/
+docs/
+web/
+node_modules/
+*.md
+!README.md

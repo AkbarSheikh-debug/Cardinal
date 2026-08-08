@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cardinal -- MCP App sandbox</title>
+    <!--
+      Served from the *sandbox* origin (PHASE-7 SS5.1) -- a different hostname than the host
+      page, on purpose. This shell never renders untrusted content itself; it only creates the
+      inner iframe that does (web/src/mcp-host/sandboxProxyEntry.ts) via a blob: URL.
+
+      A blob: document *inherits* its creator's CSP in addition to any CSP it declares for
+      itself, and the two are enforced as an intersection (most-restrictive-wins per directive)
+      -- not "the resource's own meta tag replaces this one". Discovered the hard way: an
+      earlier version of this policy had a bare `script-src 'self'` here, which silently
+      stripped `'unsafe-inline'` back out of every resource's own effective CSP no matter what
+      that resource declared, so the booking form's inline <script> never ran at all. This
+      policy therefore has to be at least as permissive as `src/mcp/apps/meta.py`'s
+      `DEFAULT_CSP` in every directive a resource might use -- the *resource's own* meta tag,
+      not this shell, is meant to be the real enforcement point (gate 7.2/7.3 test that). Where
+      this shell is genuinely more permissive than a given resource needs (`connect-src *` here
+      vs. a resource that declares no `connectDomains`), that's deliberate slack for future
+      resources to widen into, not a hole in *this* resource's own policy -- this shell makes
+      zero requests of its own, so a wide `connect-src`/`img-src`/`media-src` on *it* has no
+      exploitable effect.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; connect-src *; frame-src blob:;"
+    />
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <script type="module" src="/src/mcp-host/sandboxProxyEntry.ts"></script>
+  </body>
+</html>

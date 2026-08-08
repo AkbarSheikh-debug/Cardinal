@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cardinal -- A2UI fixture harness</title>
+  </head>
+  <body>
+    <!--
+      Gate 6.2's target: loads one golden-message fixture (?fixture=results.json) through the
+      real MessageProcessor + carCatalog and renders it with A2uiSurface. Not part of the
+      product UI -- Playwright drives this page and asserts zero console errors/warnings.
+    -->
+    <div id="root"></div>
+    <script type="module" src="/src/dev/fixture-harness.tsx"></script>
+  </body>
+</html>
