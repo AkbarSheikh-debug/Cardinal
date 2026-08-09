@@ -1,0 +1,103 @@
+# The full four-service stack from published images -- no clone, no build, no source tree.
+#
+#   curl -O https://raw.githubusercontent.com/AkbarSheikh-debug/Cardinal/main/docker-compose.hub.yml
+#   docker compose -f docker-compose.hub.yml up
+#   open http://localhost:5173
+#
+# This is the same topology as `docker-compose.yml` -- Postgres behind the API, booking-mcp on
+# its own hostname with no published port, nginx in front of the SPA -- with every `build:`
+# replaced by a pulled image. Use this one to run Cardinal; use `docker-compose.yml` to develop
+# it (that file builds from your working tree, which is the point of it).
+#
+# For the smallest possible taste of the product, there is a single-container image instead:
+#   docker run -p 8080:8080 akbardebug/cardinal
+# That one runs in DEMO_MODE with no database. This file is the real shape (see D-093).
+#
+# Pin a release by exporting CARDINAL_TAG=0.1.0; the default floats on :latest.
+
+name: cardinal
+
+services:
+  postgres:
+    # pgvector's image is plain Postgres plus the extension, so the [SCALE] semantic-search
+    # work needs no second container and no image swap later.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: cardinal
+      POSTGRES_PASSWORD: cardinal
+      POSTGRES_DB: cardinal
+    volumes:
+      - cardinal_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # api and booking both wait on this, so a cold start migrates and seeds against a ready
+      # database instead of racing it.
+      test: ["CMD-SHELL", "pg_isready -U cardinal -d cardinal"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # booking-mcp's standalone HTTP transport on its own hostname (PHASE-11 SS3). Reached only by
+  # `api`, server-side, over the compose network -- no host port is published, so nothing
+  # outside this network can reach it (CONSTITUTION II.5).
+  booking:
+    image: akbardebug/cardinal-api:${CARDINAL_TAG:-latest}
+    environment:
+      BOOKING_MCP_HTTP_HOST: "0.0.0.0"
+      BOOKING_MCP_HTTP_PORT: "8100"
+    command: ["python", "-m", "src.mcp.booking.http"]
+    healthcheck:
+      # No HTTP health route exists on this transport -- it only mounts /mcp (a JSON-RPC POST,
+      # not a cheap GET). A TCP connect is enough to know uvicorn is accepting.
+      test: ["CMD-SHELL", "python -c \"import socket; socket.create_connection(('localhost', 8100), timeout=3)\""]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 10
+
+  api:
+    image: akbardebug/cardinal-api:${CARDINAL_TAG:-latest}
+    environment:
+      CARDINAL_DATABASE_URL: postgresql+psycopg://cardinal:cardinal@postgres:5432/cardinal
+      # Trailing slash matters: `Mount("/mcp", ...)` 307-redirects a bare /mcp to /mcp/, and
+      # that extra round-trip is what produced an intermittent "unhandled errors in a
+      # TaskGroup" from the MCP client on `resources/read` (D-057).
+      CARDINAL_BOOKING_MCP_URL: http://booking:8100/mcp/
+      # Defaulted rather than fixed. `docker-compose.yml` leaves DEMO_MODE entirely to `.env`
+      # (which a clone gets by copying `.env.example`, where it is `true`); someone who
+      # downloaded only this file has no `.env`, and without a default would land in live mode
+      # with no ANTHROPIC_API_KEY -- an app that boots and then fails on the first turn.
+      # Interpolated, so `DEMO_MODE=false` in an `.env` beside this file still wins, which a
+      # hardcoded value here would not allow.
+      DEMO_MODE: "${DEMO_MODE:-true}"
+    env_file:
+      # Optional on purpose: this file has to work for someone who downloaded it alone.
+      - path: .env
+        required: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      booking:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head
+      && python -m scripts.seed_marketplace --if-empty
+      && uvicorn src.api.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      # More start-up slack than the image bakes in: this service migrates and seeds 240 rows
+      # before uvicorn ever binds :8000.
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      start_period: 40s
+      retries: 15
+
+  web:
+    image: akbardebug/cardinal-web:${CARDINAL_TAG:-latest}
+    ports:
+      - "5173:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  cardinal_pgdata:

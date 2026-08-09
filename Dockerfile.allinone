@@ -1,0 +1,131 @@
+# The published, one-command image: `docker run -p 8080:8080 akbardebug/cardinal`.
+#
+# Everything the demo needs in a single container -- the built SPA behind nginx, the API, and
+# booking-mcp's standalone HTTP transport -- with no database, no API keys and no clone. It
+# boots into DEMO_MODE (CONSTITUTION III.7), which is the same scripted flow `make demo` runs.
+#
+# `Dockerfile` + `docker-compose.yml` remain the real deployment shape and are unchanged: four
+# services, separate images, separate lifecycles, Postgres behind the API (PHASE-11 SS3). This
+# file does not replace them and shares their build inputs rather than forking them --
+# `web/nginx.conf` is reused verbatim below with only its upstream rewritten. See D-093 for
+# why both exist.
+#
+# Built and pushed by `scripts/publish_docker.sh` / `.github/workflows/docker-publish.yml`.
+# Note the companion `Dockerfile.allinone.dockerignore`: the root `.dockerignore` excludes
+# `web/`, which this build needs, so BuildKit's per-Dockerfile ignore file supplies a different
+# exclusion set for this build alone.
+
+# ---- web builder: the real `vite build`, same as web/Dockerfile ------------------------------
+FROM node:22-slim AS web-builder
+
+WORKDIR /build
+
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+
+COPY web/ ./
+RUN npm run build
+
+# ---- python builder: resolve deps and build the `cardinal` wheel in a throwaway layer -------
+FROM python:3.12-slim AS py-builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /build
+
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install . \
+    # Nothing installs packages at runtime, and pip/setuptools/wheel are ~15MB of a layer that
+    # every `docker pull` of this image pays for. (`claude_agent_sdk/_bundled` is 285MB of the
+    # rest -- the vendored CLI the agent needs the moment ANTHROPIC_API_KEY is set, so it is
+    # not removable without quietly making this a demo-only image.)
+    && /opt/venv/bin/pip uninstall --yes pip setuptools wheel 2>/dev/null || true
+
+# ---- runtime: python + nginx, three processes, non-root -------------------------------------
+FROM python:3.12-slim AS runtime
+
+ARG VERSION=0.1.0
+ARG REVISION=unknown
+
+LABEL org.opencontainers.image.title="Cardinal" \
+      org.opencontainers.image.description="A multistep car-buying agent: interviews a buyer, researches rental and dealership marketplaces, and returns ranked recommendations it can defend -- with booking and payment inside the conversation. Runs with zero API keys in DEMO_MODE." \
+      org.opencontainers.image.source="https://github.com/AkbarSheikh-debug/Cardinal" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}"
+
+# /usr/sbin holds the nginx binary and is not on a non-root user's default PATH on Debian.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:/usr/sbin:$PATH" \
+    DEMO_MODE=true \
+    BOOKING_MCP_HTTP_HOST=127.0.0.1 \
+    BOOKING_MCP_HTTP_PORT=8100 \
+    CARDINAL_BOOKING_MCP_URL=http://127.0.0.1:8100/mcp/
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nginx \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system cardinal \
+    && useradd --system --create-home --gid cardinal cardinal
+
+WORKDIR /app
+
+COPY --from=py-builder /opt/venv /opt/venv
+
+# `alembic upgrade head` and `scripts.seed_marketplace` only run when CARDINAL_DATABASE_URL is
+# set, but they have to be present for that path to exist at all.
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
+COPY scripts/ ./scripts/
+# `src/agent/prompts.py`'s `load_prompt` (CONSTITUTION III.6) falls back to reading this
+# directory relative to cwd; without it every prompt file fails to load on first use. `src/`
+# itself is not copied -- it is installed into the venv above as the `cardinal` package.
+COPY prompts/ ./prompts/
+
+# `--chown` here rather than in the `chown -R` below: the built frontend is ~26MB (mostly the
+# showroom photography), and chown'ing it in a later layer rewrites every one of those files
+# into a second copy the image then carries forever.
+COPY --from=web-builder --chown=cardinal:cardinal /build/dist /usr/share/nginx/html
+
+COPY docker/nginx-allinone.conf /etc/nginx/nginx.conf
+COPY docker/healthcheck.py /app/docker/healthcheck.py
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+# One source of truth for the route table: `web/nginx.conf` is the compose stack's server
+# block, where the API lives on another host. Here it is the same container, so only the
+# upstream changes -- rewritten at build time rather than copied into a second file that would
+# then drift every time a route is added (gate 16.13 checks web/nginx.conf, not a copy of it).
+#
+# The two `grep`s make the rewrite fail the build rather than silently produce a config that
+# proxies to a hostname no longer resolvable here.
+#
+# The `sed -i 's/\r$//'`: checked out on Windows, `entrypoint.sh` can arrive with CRLF line
+# endings, which makes the kernel look for an interpreter literally named `bash\r` and fail
+# with a "no such file or directory" naming a file that plainly exists. `.gitattributes` pins
+# `eol=lf`; this is the belt to that braces.
+COPY web/nginx.conf /tmp/web-nginx.conf
+RUN sed 's|http://api:8000|http://127.0.0.1:8000|g' /tmp/web-nginx.conf \
+        > /etc/nginx/conf.d/default.conf \
+    && rm /tmp/web-nginx.conf \
+    && grep -q '127.0.0.1:8000' /etc/nginx/conf.d/default.conf \
+    && ! grep -q 'http://api:8000' /etc/nginx/conf.d/default.conf \
+    && sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh \
+    && chown -R cardinal:cardinal /app
+
+USER cardinal
+
+# Only nginx is published. The API (:8000) and booking-mcp (:8100) listen on loopback inside
+# the container and are reachable only through it -- the same containment the compose stack
+# gets from publishing no host port for `booking` (CONSTITUTION II.5).
+EXPOSE 8080
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=6 \
+    CMD ["python", "/app/docker/healthcheck.py"]
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -50,6 +50,12 @@ CLAUDE.md
 .specify/integrations/claude.manifest.json
 .omni/
 
+# `plans/` is published. An earlier pass excluded everything under it except GUARDRAILS.md as
+# "internal planning docs"; that was reversed deliberately -- CLAUDE.md and README.md both link
+# to plans/PLAN-00-OVERVIEW.md and the phase docs, and a repository whose own entry point 404s
+# is worse than one that shows its working. The phase docs are also the clearest evidence of
+# how the build was sequenced.
+
 # ---------------------------------------------------------------------------
 # Editors and OS
 # ---------------------------------------------------------------------------

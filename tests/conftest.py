@@ -21,15 +21,18 @@ from src.adapters.store import InMemoryListingStore
 from src.domain.listing import Listing
 
 
-def pytest_asyncio_loop_factories(config: object, item: object) -> dict[str, object] | None:
+def pytest_asyncio_loop_factories(config: object, item: object) -> dict[str, object]:
     """psycopg's async mode rejects Windows' default ProactorEventLoop.
 
     Uses pytest-asyncio's hook rather than overriding the `event_loop_policy` fixture --
     that override is deprecated, and `asyncio`'s policy API is itself slated for removal.
+    Must always return a non-empty mapping: once this hook is implemented at all,
+    pytest-asyncio requires a real result from it, so the non-Windows branch can't just
+    return `None` to mean "use the default" -- it has to name that default explicitly.
     """
     if sys.platform == "win32":
         return {"selector": asyncio.SelectorEventLoop}
-    return None
+    return {"asyncio": asyncio.new_event_loop}
 
 
 @pytest.fixture(scope="session")

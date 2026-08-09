@@ -29,7 +29,8 @@ is the v0 of a real product rather than a demo that has to be thrown away.
 
 ## Contents
 
-- [Quick start](#quick-start) — [Docker](#docker-everything-zero-api-keys) ·
+- [Quick start](#quick-start) — [one command, no clone](#one-command-no-clone-docker-hub) ·
+  [Docker from a clone](#docker-from-a-clone-everything-zero-api-keys) ·
   [local](#local-without-containers) · [development commands](#development-commands)
 - [What it actually does](#what-it-actually-does) — the eight beats of the flow
 - [Architecture](#architecture)
@@ -54,13 +55,103 @@ is the v0 of a real product rather than a demo that has to be thrown away.
 
 ## Quick start
 
-### Docker (everything, zero API keys)
+### One command, no clone (Docker Hub)
 
 ```bash
-git clone <this repo> && cd Car-Matchmaker
+docker run -p 8080:8080 akbardebug/cardinal
+```
+
+Open <http://localhost:8080>. That is the whole thing — the SPA, the API and the booking MCP
+server in one container, in `DEMO_MODE`, with **no API key, no database and no source tree**.
+It is the fastest way to see whether this project is worth your time.
+
+**What to look at once it's up:**
+
+| Go to | To see |
+|---|---|
+| [`/`](http://localhost:8080/) | The showroom front page |
+| [`/chat`](http://localhost:8080/chat) | The agent — click **Start Demo** for the full interview → research → ranked results → booking → checkout flow |
+| [`/login`](http://localhost:8080/login) | Sign in. The OTP codes are dummy and the API returns them itself: `curl -X POST localhost:8080/auth/request-otp -H 'content-type: application/json' -d '{"email":"you@example.com","role":"buyer"}'` |
+| [`/cart`](http://localhost:8080/cart) | Add a car from a result card, then check out with full payee disclosure |
+| [`/seller`](http://localhost:8080/seller) | The dealer console — leads, intent tiers, and the signals behind each. Sign in as a seller first |
+| [`/health`](http://localhost:8080/health) | `{"status":"ok","backend":"memory","demo_mode":true,"listings":240,...}` |
+
+**What is inside it.** One container, three processes: nginx on `8080` (the only published
+port), the API on `8000` and booking-mcp on `8100`, both loopback-only. Runs as a non-root
+user. If any of the three dies the container exits rather than serving a healthy-looking 502.
+
+#### The three published images
+
+All under [`akbardebug`](https://hub.docker.com/u/akbardebug), tagged `:latest` and `:0.1.0`:
+
+| Image | Pull | What it is |
+|---|---|---|
+| [`akbardebug/cardinal`](https://hub.docker.com/r/akbardebug/cardinal) | 202 MB | Everything in one container. `docker run` and you're done |
+| [`akbardebug/cardinal-api`](https://hub.docker.com/r/akbardebug/cardinal-api) | 178 MB | The backend; also runs booking-mcp under a different `command` |
+| [`akbardebug/cardinal-web`](https://hub.docker.com/r/akbardebug/cardinal-web) | 45 MB | The built SPA behind nginx |
+
+The last two are **halves of a stack, not standalone apps** — `cardinal-web` on its own serves
+the SPA and 502s on every API call, because there is no `api` host to proxy to. Use them
+through the compose file below.
+
+#### The full four-service stack, still without a clone
+
+```bash
+curl -O https://raw.githubusercontent.com/AkbarSheikh-debug/Cardinal/main/docker-compose.hub.yml
+docker compose -f docker-compose.hub.yml up
+```
+
+Then <http://localhost:5173>. That is one downloaded file and no source tree: Postgres, the
+API, booking-mcp on its own hostname, and nginx — the shape the project is actually built as.
+The single-container image is the convenience version (D-093). Pin a release with
+`CARDINAL_TAG=0.1.0`; stop it with `docker compose -f docker-compose.hub.yml down`.
+
+#### Configuring the container
+
+Everything below is optional — the image runs with all of it unset.
+
+| Variable | Effect |
+|---|---|
+| `DEMO_MODE` | `true` (the image default) runs the scripted flow with no model calls |
+| `ANTHROPIC_API_KEY` | Required once `DEMO_MODE=false` — puts a real model behind the same UI |
+| `CARDINAL_DATABASE_URL` | A `postgresql+psycopg://…` URL. Set it and the container migrates and seeds that database on startup instead of using the in-memory catalogue |
+| `CARDINAL_AGENT_MODEL`, `CARDINAL_AGENT_EFFORT`, `CARDINAL_AGENT_THINKING` | Model selection and reasoning depth |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` | Ship traces to Langfuse |
+
+Running the live agent instead of the scripted demo:
+
+```bash
+docker run -p 8080:8080 -e DEMO_MODE=false -e ANTHROPIC_API_KEY=sk-ant-... akbardebug/cardinal
+```
+
+Every variable the codebase reads is documented in [`.env.example`](.env.example), and gate 11.7
+goes red if one is missing from it — the list cannot quietly fall behind the code.
+
+#### Notes and troubleshooting
+
+- **Apple silicon.** The images are `linux/amd64` today, so they run under emulation on an M-series
+  Mac — it works, it is slower to start. A native `arm64` image is published by
+  [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) on a `v*` tag;
+  once that has run, both architectures resolve from the same tag automatically.
+- **Port 8080 already taken?** Map any other host port: `docker run -p 3000:8080 akbardebug/cardinal`,
+  then use <http://localhost:3000>. Only the left-hand number changes.
+- **Watch it come up.** `docker logs -f <container>` shows all three processes; `docker ps` shows
+  `(healthy)` once the API *and* booking-mcp are both answering — the healthcheck probes both, so
+  a green container means the checkout path is live too.
+- **Nothing to clean up.** No volumes, no config files. `docker rm -f <container>` and it is gone.
+  The compose stack keeps a Postgres volume; `docker compose -f docker-compose.hub.yml down -v`
+  removes that too.
+
+### Docker from a clone (everything, zero API keys)
+
+```bash
+git clone https://github.com/AkbarSheikh-debug/Cardinal.git && cd Cardinal
 cp .env.example .env          # defaults are enough -- DEMO_MODE=true needs nothing else
 docker compose up --build
 ```
+
+This builds from your working tree rather than pulling — the path to use when you are changing
+the code. `make image` / `make run` build and run the single-container image the same way.
 
 Open <http://localhost:5173> and click **Start Demo**. The full interview → rent-vs-buy
 break-even → parallel research → ranked results → score breakdown → powertrain explainer →
@@ -284,7 +375,7 @@ src/api/         FastAPI. Transport only — the only package allowed to import 
 deliberately: a `ruff` banned-api rule catches it while you type
 ([`pyproject.toml`](pyproject.toml) `flake8-tidy-imports`), and
 [`tests/test_layer_boundary.py`](tests/test_layer_boundary.py) catches it when someone adds a
-`# noqa`. Full rules: [`plans/PLAN-00-OVERVIEW.md`](plans/PLAN-00-OVERVIEW.md) §2.
+`# noqa`. The rules themselves are restated in [`CONSTITUTION.md`](CONSTITUTION.md) §II.
 
 ### Package by package
 
@@ -762,14 +853,18 @@ Car-Matchmaker/
 ├── scripts/             gate_phase0..16.py, seed_marketplace.py, asset generators
 ├── tests/               unit · contract (parametrised per adapter) · integration
 ├── migrations/          Alembic, 0001..0006
-├── plans/               PLAN-00-OVERVIEW + one doc per phase
 ├── specs/               spec-kit artifacts
 ├── prompts/             agent role prompts
 ├── docs/                deck, demo script, video script, screenshots
+│   └── dockerhub/       the three Docker Hub overview pages, pushed from here by CI
+├── docker/              entrypoint · nginx main config · healthcheck for the all-in-one image
 ├── CONSTITUTION.md      hard constraints + their enforcement mechanisms
 ├── PROGRESS.md          the only source of truth for what exists
 ├── DECISIONS.md         the "why" behind anything non-obvious
-└── docker-compose.yml   web · api · booking · postgres
+├── Dockerfile           the api + booking image (two commands, one dependency set)
+├── Dockerfile.allinone   web + api + booking in one container -- the published `cardinal` image
+├── docker-compose.yml   web · api · booking · postgres, built from your working tree
+└── docker-compose.hub.yml   the same four services, pulled from Docker Hub instead
 ```
 
 ---
@@ -782,13 +877,13 @@ Car-Matchmaker/
 | [`PROGRESS.md`](PROGRESS.md) | **Source of truth** for what is built, with real gate output |
 | [`DECISIONS.md`](DECISIONS.md) | Numbered decision log (D-001…) — the *why* |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, the rules that bite most often, and what to do before a PR |
-| [`plans/PLAN-00-OVERVIEW.md`](plans/PLAN-00-OVERVIEW.md) | The full plan; one doc per phase alongside it |
-| [`plans/GUARDRAILS.md`](plans/GUARDRAILS.md) | Every safety mechanism, indexed by gate |
-| [`plans/PLAN-02-MARKETPLACE.md`](plans/PLAN-02-MARKETPLACE.md) | The plan behind phases 12–16 (identity, dealer, cart, seller, voice) |
+| [`plans/GUARDRAILS.md`](plans/GUARDRAILS.md) | Every safety mechanism, indexed by the gate that enforces it |
 | [`prompts/`](prompts/) | The agent role prompts, as reviewable Markdown |
+| [`specs/`](specs/) | spec-kit specification artifacts |
 | [`docs/DEMO-SCRIPT.md`](docs/DEMO-SCRIPT.md) | The eight-beat demo, as performed |
 | [`docs/VIDEO-SCRIPT.md`](docs/VIDEO-SCRIPT.md) | Demo video narration |
 | [`docs/PROPOSAL-DEALER-ECOSYSTEM.md`](docs/PROPOSAL-DEALER-ECOSYSTEM.md) | The dealer-side product proposal behind phases 13–15 |
+| [`docs/dockerhub/`](docs/dockerhub/) | The three Docker Hub overview pages — source of what appears on hub.docker.com |
 
 ---
 

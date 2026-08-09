@@ -1,7 +1,12 @@
 ﻿PYTHON ?= python
 PHASES := 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
 
-.PHONY: help dev test lint typecheck verify gate gates seed migrate up down clean
+# Docker Hub coordinates for the published images (scripts/publish_docker.sh, D-093).
+NAMESPACE ?= akbardebug
+VERSION ?= 0.1.0
+
+.PHONY: help dev test lint typecheck verify gate gates seed migrate up down clean \
+	image run docker-build docker-push hub-up hub-down
 
 help:  ## show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -50,3 +55,26 @@ down:  ## stop the stack, keep the volume
 
 clean:  ## stop the stack and drop the data volume
 	docker compose down -v
+
+# ---- published images (Docker Hub) ----------------------------------------------------------
+
+image:  ## build the one-container image locally
+	docker build -f Dockerfile.allinone \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg REVISION=$$(git rev-parse --short HEAD) \
+		-t $(NAMESPACE)/cardinal:$(VERSION) -t $(NAMESPACE)/cardinal:latest .
+
+run: image  ## build it and open the whole app on :8080, no keys, no database
+	docker run --rm -p 8080:8080 $(NAMESPACE)/cardinal:$(VERSION)
+
+docker-build:  ## build all three published images, push nothing
+	bash scripts/publish_docker.sh --dry-run --version $(VERSION) --namespace $(NAMESPACE)
+
+docker-push:  ## build all three for amd64+arm64 and push to Docker Hub (needs docker login)
+	bash scripts/publish_docker.sh --version $(VERSION) --namespace $(NAMESPACE)
+
+hub-up:  ## run the full stack from published images, no build
+	docker compose -f docker-compose.hub.yml up
+
+hub-down:  ## stop it
+	docker compose -f docker-compose.hub.yml down

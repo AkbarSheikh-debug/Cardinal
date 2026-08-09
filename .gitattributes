@@ -1,0 +1,8 @@
+# `docker/entrypoint.sh` is COPY'd into a Linux image and run as the container's ENTRYPOINT.
+# With CRLF endings the kernel looks for an interpreter named `bash\r`, and the error names a
+# file that plainly exists -- a genuinely confusing hour. Pin LF for everything shell-shaped
+# regardless of the checkout platform. (Dockerfile.allinone also strips CR at build time.)
+*.sh text eol=lf
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+*.conf text eol=lf

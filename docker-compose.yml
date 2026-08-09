@@ -28,6 +28,11 @@ services:
   # compose network -- no host port is published, so nothing outside this network can reach it
   # (CONSTITUTION II.5: MCP App views are proxied through the host, never direct).
   booking:
+    # `image:` alongside `build:` names what a local build produces, so `docker compose build`
+    # and `scripts/publish_docker.sh` tag the same thing and `docker compose push` works.
+    # `booking` and `api` deliberately share one image (see Dockerfile's own header) -- two
+    # `command:` overrides, one dependency set.
+    image: akbardebug/cardinal-api:${CARDINAL_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -45,6 +50,7 @@ services:
       retries: 10
 
   api:
+    image: akbardebug/cardinal-api:${CARDINAL_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -84,6 +90,7 @@ services:
       retries: 15
 
   web:
+    image: akbardebug/cardinal-web:${CARDINAL_TAG:-latest}
     build:
       context: ./web
       dockerfile: Dockerfile

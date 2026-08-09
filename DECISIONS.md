@@ -2353,3 +2353,111 @@ product owner from a live screenshot. Fixed by styling `option` with an explicit
 `background-color` and `color` at all three call sites — solid, not the input's translucent
 fill, because gradient/opacity `option` styling is unreliable across browsers and invisible text
 is not something to gamble on twice.
+
+---
+
+## D-093 — A one-container image on Docker Hub, alongside the four-service stack
+
+**The problem the compose stack does not solve.** Trying Cardinal cost a clone, a `cp .env.example
+.env`, and a `docker compose up --build` that compiles a frontend and a Python venv before
+anything is visible. That is the right workflow for someone *changing* the code and the wrong one
+for a judge with fifteen minutes. Publishing images fixes the build; it does not fix the clone,
+because compose needs a file that only exists in the repository.
+
+**Two published shapes, not one.** `akbardebug/cardinal` is a single container running nginx, the
+API and booking-mcp together — `docker run -p 8080:8080 akbardebug/cardinal`, no file, no key, no
+database. `docker-compose.hub.yml` is the four-service topology with every `build:` replaced by a
+pulled image, downloadable as one file. The first is for looking; the second is for running.
+
+**One container running three processes is an anti-pattern, and it is still the right call here.**
+The objection is real: separate lifecycles, separate scaling, separate blast radius are why
+PHASE-11 §3 put booking-mcp on its own hostname in the first place, and none of that survives in
+a single container. What makes it acceptable is that **the four-service stack did not move**.
+`Dockerfile`, `docker-compose.yml` and `web/Dockerfile` are unchanged apart from `image:` keys;
+the all-in-one is an additional artifact, and both compose files resolve to the same image set.
+If the two ever disagree about how Cardinal is deployed, the compose files win.
+
+**The entrypoint deliberately has no supervisor.** `docker/entrypoint.sh` starts three processes
+and `wait -n`s on them: the first to exit takes the container with it, carrying its exit code
+out. supervisord or s6 would restart a crashed API behind a healthy nginx, which is exactly the
+failure that leaves someone staring at a 502 with a green container. For a demo image, "die
+loudly" beats "stay up".
+
+**`web/nginx.conf` is reused, not copied.** The all-in-one needs the same route table with a
+different upstream (`127.0.0.1:8000` instead of `api:8000`), and a second copy of that file would
+drift the first time a route was added — which is the D-057 family of bug that has now cost this
+project four separate debugging sessions, and which gate 16.13 exists to prevent by deriving the
+required prefixes from FastAPI's own route table. So the Dockerfile `sed`s the upstream at build
+time and `grep`s the result both ways, failing the build if the rewrite did not take. Gate 16.13
+still checks the one real file.
+
+**The healthcheck probes booking-mcp too.** `/health` through nginx proves two of the three
+processes; a container whose checkout path was dead would still report healthy. `docker/
+healthcheck.py` adds a TCP connect to `:8100` — the same probe, for the same reason, that the
+`booking` service's compose healthcheck uses.
+
+**`Dockerfile.allinone.dockerignore`.** The root `.dockerignore` excludes `web/`, because the
+`api` image has no use for it; this build compiles the frontend from the same context. BuildKit
+reads `<dockerfile>.dockerignore` in preference to the root one, which lets both builds keep a
+correct exclusion set with no shared file to compromise between them.
+
+**What was measured, not assumed.** The image is ~810MB, of which 285MB is
+`claude_agent_sdk/_bundled` — the vendored CLI the agent needs the moment `ANTHROPIC_API_KEY` is
+set. Removing it would halve the image and quietly make this a demo-only artifact, so it stays.
+`pip`/`setuptools`/`wheel` were removed from the runtime venv, and the built frontend is
+`COPY --chown`'d rather than `chown -R`'d afterwards — the latter was rewriting all 26MB of
+showroom photography into a second layer. Those two together took 879MB to 813MB.
+
+**The namespace was wrong for an hour.** `akbarsheikh` was an inference from the git author name;
+Docker Hub 404s it, and the account actually logged in on the build machine is `akbardebug`.
+Worth recording because the failure mode is silent in the other direction — the images would have
+been built, tagged and pushed under a name nobody owns, and the README would have documented a
+`docker run` that pulls nothing. **Check `docker-credential-<store> list`, not the git author.**
+For the same reason `scripts/publish_docker.sh` verifies login *before* building rather than
+letting a push 401 at the end: its first version grepped `auths` in `config.json`, which is empty
+whenever a credential helper is configured, and refused to run on a machine that was logged in.
+
+---
+
+## D-094 — `/cart` and `/seller` 404'd on a hard reload, and clicking through hid it
+
+Found while verifying the README's own instructions against the published container (D-093) —
+the table said "go to `/cart`", so the obvious thing was to check that it worked. It did not.
+
+**The bug.** `GET /cart` returned `301 -> /cart/`, and `/cart/` is the cart API, which has no
+such route: `404`. Same for `/seller`. nginx answers a request that *exactly* matches a prefix
+location minus its trailing slash with an implicit redirect to the slashed form, and
+`location /cart/ { proxy_pass ... }` is exactly that shape. The SPA fallback at the bottom of
+the file never ran.
+
+**Why nobody noticed.** React Router handles `/` → `/cart` client-side and never asks nginx, so
+every path through the app worked. Only a hard reload, a bookmark, a pasted link or a
+direct-navigating test hits the server for that URL — and no gate did. Gates 14 and 15 drive
+the cart and seller console by *clicking*, which is the right way to test the feature and the
+exact reason this stayed invisible.
+
+**The fix**, in `web/nginx.conf` so both the compose stack and the all-in-one image get it from
+one source:
+
+```nginx
+location = /cart   { try_files /index.html =404; }
+location = /seller { try_files /index.html =404; }
+```
+
+`=` is an exact match, which outranks every prefix location in nginx regardless of file order,
+so this needs no reasoning about block ordering — unlike D-076's `/seller/events`-before-
+`/seller/` fix, which does.
+
+**`/auth`, `/voice` and `/sessions` deliberately get no equivalent.** They 301 the same way and
+it costs nothing: `web/src/routes.tsx` defines exactly `/`, `/login`, `/chat`, `/cart` and
+`/seller`, so there is no page behind those three to fail to reach. Adding blocks "for
+symmetry" would assert a client-side route exists where none does.
+
+**Fourth in the D-057 family** (`/models`, then `/auth`, then `/voice`, now this), and the
+second consequence of D-076's page-vs-API prefix collision. The first three were *missing*
+proxy blocks; this one is a block that is present and correct for its own path while shadowing
+a neighbouring one. Gate 16.13 catches the first kind — it derives the required API prefixes
+from FastAPI's route table — and structurally cannot catch this kind, because the failing URL
+is not an API route at all. **The missing check is the inverse**: every client-side route in
+`routes.tsx` should resolve to the SPA through nginx. That check does not exist yet and is
+worth adding.

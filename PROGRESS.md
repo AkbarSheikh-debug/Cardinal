@@ -27,6 +27,204 @@ never "the code looks right" (CONSTITUTION III.1).
 | **16 — VOICE** | ✅ **Done** — `[MVP]` complete, `[SCALE]` deferred | **11 PASS, 1 PENDING** |
 | **Design system + front page** | ✅ **Done** — Paddock Green; not a phase, no gate of its own | **every existing gate re-run green** |
 | **Demo-banner removal** | ✅ **Done** — D-091; CONSTITUTION I.5 revised | **17/17 gates re-run green** |
+| **Docker Hub publishing** | ✅ **Done** — D-093/D-094; not a phase, no gate of its own | **gates 11, 14, 15, 16 re-run green; see below** |
+
+---
+
+## Docker Hub publishing ✅ — D-093, D-094
+
+Not a phase and it has no gate of its own, so the evidence is the container itself: every claim
+below was produced by running the built image, not by reading the Dockerfile. Run on
+2026-08-09.
+
+### A real routing bug, found by checking the README's own instructions — D-094
+
+Verifying that the URLs this section tells people to visit actually resolve turned up a bug
+that predates the container and affects the compose stack identically: **`/cart` and `/seller`
+404'd on a hard reload.** nginx answers a request exactly matching a prefix location minus its
+trailing slash with a 301 to the slashed form, so `/cart` → `/cart/` → the cart API, which has
+no such route. React Router handles those transitions client-side and never asks nginx, so
+every path *through* the app worked and no gate saw it — gates 14 and 15 reach both pages by
+clicking, which is the right way to test the feature and exactly why this stayed invisible.
+
+Fixed in `web/nginx.conf` (one source of truth — the all-in-one image reuses that file with
+only its upstream rewritten) with two exact-match blocks:
+
+```nginx
+location = /cart   { try_files /index.html =404; }
+location = /seller { try_files /index.html =404; }
+```
+
+Measured against a rebuilt container, before and after:
+
+```
+                     before          after
+  /cart              301 -> 404      200 (index.html)
+  /seller            301 -> 404      200 (index.html)
+  /cart/items        401             401     API still reached, still demands auth
+  /cart/count        401             401
+  /seller/leads      401             401
+  /seller/dealers    200             200     public route, still served by the API
+  /seller/profile    401             401
+  /  /chat  /login   200             200
+  /health /adapters /models /voice/capabilities   200  200
+```
+
+`/auth`, `/voice` and `/sessions` redirect the same way and were deliberately left alone: they
+are API-only, and `web/src/routes.tsx` defines exactly `/`, `/login`, `/chat`, `/cart` and
+`/seller`, so there is no page behind them to fail to reach.
+
+**Every gate that touches the changed file was re-run, not read:**
+
+```
+GATE 16  GREEN (1 pending)   12 passed  -- incl. 16.13, which derives the required API
+                                           prefixes from FastAPI's own route table
+GATE 14  GREEN               12/12      -- cart, in a real Chromium; 14.8 re-runs gate 8 in full
+GATE 15  GREEN               10/10      -- seller console, two simultaneous browser contexts
+GATE 11  GREEN (3 pending)   8 passed   -- the whole compose stack, built and run; 11.10
+                                           re-runs gates 0..10, each exiting 0
+```
+
+D-094 records the structural gap this exposed: gate 16.13 checks that every *API* prefix is
+proxied, and cannot catch this class of bug because the failing URL is not an API route. The
+inverse check — every client-side route in `routes.tsx` resolves to the SPA through nginx —
+does not exist yet.
+
+**`docker run -p 8080:8080 akbardebug/cardinal` is now the whole quick start.** One container,
+three processes (nginx `:8080` published, API `:8000` and booking-mcp `:8100` on loopback),
+non-root, no database, no keys. The four-service compose stack is unchanged and is still the
+real deployment shape — this is an additional artifact, not a replacement (D-093).
+
+### What was actually run against the container
+
+```
+STATUS            Up 25 seconds (healthy)
+GET /health       {"status":"ok","backend":"memory","demo_mode":true,"listings":240,
+                   "sources":{"mock_autobazaar":130,"mock_drivenow":110}}
+GET /             200 text/html          GET /models              200
+GET /chat         200 (SPA fallback)     GET /adapters            200
+GET /voice/capabilities   200            GET /models/powertrain/hybrid.glb   200, 920 bytes
+GET /showroom/hero-paddock-1280.webp     200, 38,604 bytes
+
+POST /demo/{id}/start + open SSE stream  15,257 bytes streamed; phases interview -> research;
+                                         real listings surfaced ("2024 Mazda CX-5 GT-Line ...")
+
+POST /mcp-apps/{id}/rpc  resources/read  ui://booking/form      -> allowed / ok
+POST /mcp-apps/{id}/rpc  resources/read  ui://checkout/payment  -> allowed / ok
+                                         (the API -> booking-mcp hop, across processes)
+
+web/tests/open-app.spec.ts against the container, both themes:
+                                         4 passed (6.1s) -- showroom, sign-in, cart,
+                                         seller console, A2UI result cards
+
+docker stop                              0.7s, clean uvicorn shutdown, exit 143
+```
+
+### Published, and verified by pulling them back
+
+All three are on Docker Hub under `akbardebug`, `:0.1.0` and `:latest`, `linux/amd64`:
+
+```
+cardinal       latest (202MB), 0.1.0 (202MB)     one container, the whole app
+cardinal-api   latest (178MB), 0.1.0 (178MB)     backend; also runs booking-mcp
+cardinal-web   latest  (45MB), 0.1.0  (45MB)     built SPA behind nginx
+```
+
+The local images were then **deleted and re-pulled**, so what was tested is what a stranger
+gets rather than what this machine happened to have built:
+
+```
+docker rmi akbardebug/cardinal ... && docker pull akbardebug/cardinal:latest
+docker run -d -p 8080:8080 akbardebug/cardinal:latest
+  -> healthy; /health 240 listings; / 200; ui://checkout/payment reads back
+```
+
+(The digest from that run is deliberately not pasted: the images were rebuilt and re-pushed
+afterwards, when `docker/healthcheck.py` picked up a comment change during lint, and a recorded
+digest that no longer resolves is worse than none. What was proven is the *pull-and-run* path,
+which is unaffected.)
+
+And the compose path, run from an **empty directory containing only
+`docker-compose.hub.yml`** — no clone, no `.env`, no source tree:
+
+```
+docker compose -f docker-compose.hub.yml up -d
+  postgres Healthy -> booking Healthy -> api Healthy -> web Started
+  api   Up 14 seconds (healthy)     postgres  Up 19 seconds (healthy)
+  booking Up 19 seconds (healthy)   web       Up  8 seconds (healthy)
+  GET  /            200
+  GET  /health      {"status":"ok","backend":"memory","demo_mode":true,"listings":240,...}
+  POST /mcp-apps/{id}/rpc  ui://booking/form -> read back (api -> booking by hostname)
+```
+
+The demo-session and MCP-RPC checks matter most: they are the two paths that cross a process
+boundary inside the container, and a single-container repackaging is exactly where they would
+break silently.
+
+### Gate 11 re-run, because `docker-compose.yml` was touched
+
+Adding `image:` keys to the three build services is the only change to the existing stack, and
+gate 11 is the one that builds and runs it. Re-run in full: **unchanged, 8 PASS / 3 PENDING**,
+the same three pendings as before (a human on a clean machine, the demo video, and the
+`[SCALE]` public deployment).
+
+```
+  11.1   PASS     Clean clone -> docker compose up -> all services healthy within 120s
+  11.2   PASS     Seed runs automatically; /health reports >=100 listings
+  11.3   PASS     Playwright e2e walks all seven beats and screenshots each
+  11.4   PASS     e2e passes with the entire environment unset except DEMO_MODE=true
+  11.5   PASS     'booking' service resolves on a distinct hostname from 'web'
+  11.6   PASS     Every image runs as non-root; no image exceeds 800 MB
+           api: user='cardinal' size=178MB; booking: user='cardinal' size=178MB;
+           web: user='101' size=45MB
+  11.7   PASS     .env.example covers every variable read anywhere in the codebase
+  11.8   PENDING  README's run instructions executed verbatim on a clean machine
+  11.9   PENDING  Deck and video present under docs/
+  11.10  PASS     make verify green: every gate 0-11
+  11.11  PENDING  [SCALE] Public deployment reachable and healthy
+------------------------------------------------------------------------------
+  8 passed, 0 failed, 3 pending
+  GATE 11 GREEN (with 3 pending)
+```
+
+`ruff check` and `ruff format --check` are clean over `src tests scripts` (201 files) and over
+the one new Python file, `docker/healthcheck.py`.
+
+### What shipped
+
+| Area | Files |
+|---|---|
+| All-in-one image | `Dockerfile.allinone`, `Dockerfile.allinone.dockerignore` (BuildKit's per-Dockerfile ignore — the root one excludes `web/`) |
+| Process supervision | `docker/entrypoint.sh` — three processes, `wait -n`, first exit takes the container down; no supervisord, deliberately |
+| nginx | `docker/nginx-allinone.conf` (main config, non-root paths under `/tmp`); the server block is `web/nginx.conf` with its upstream `sed`'d to `127.0.0.1:8000` at build time, verified by two `grep`s |
+| Healthcheck | `docker/healthcheck.py` — `/health` through nginx **and** a TCP connect to booking-mcp |
+| Published-image compose | `docker-compose.hub.yml` — the four-service topology with every `build:` replaced by a pull; `image:` keys added to `docker-compose.yml` so both resolve to the same set |
+| Publish tooling | `scripts/publish_docker.sh` (buildx, multi-arch, login precheck), `Makefile` (`image`, `run`, `docker-build`, `docker-push`, `hub-up`, `hub-down`) |
+| CI | `.github/workflows/docker-publish.yml` — `v*` tag builds amd64+arm64 and syncs the Hub descriptions |
+| Hub pages | `docs/dockerhub/{cardinal,cardinal-api,cardinal-web}.md` |
+| Line endings | `.gitattributes` — `eol=lf` for `*.sh`/`Dockerfile*`/`*.conf` |
+
+### Worth knowing
+
+- **The image is 813MB, and 285MB of that is `claude_agent_sdk/_bundled`** — the vendored CLI
+  the agent needs the moment `ANTHROPIC_API_KEY` is set. Removing it would halve the image and
+  quietly make this a demo-only artifact. Two things that *were* removed took 879MB → 813MB:
+  `pip`/`setuptools`/`wheel` from the runtime venv, and a `chown -R` that was rewriting all
+  26MB of showroom photography into a second layer (`COPY --chown` instead).
+- **Compressed, the pull is ~202MB.**
+- **The namespace was wrong until it was checked.** `akbarsheikh` was inferred from the git
+  author name and 404s on Docker Hub; the account is `akbardebug`. The failure mode is silent
+  — images build, tag and push fine under a name nobody owns. D-093 records the check that
+  catches it.
+
+### Deferred, deliberately
+
+- **`linux/arm64` is not pushed yet.** The images published today are amd64; on Apple silicon
+  they run under emulation, which works and is slower to start. The release workflow builds
+  both on a `v*` tag — tagging `v0.1.0` is all that is needed, and nothing else has to change.
+- **The Hub description pages are pushed by CI only.** Until a `v*` tag runs the workflow, the
+  three repositories on Docker Hub have empty overview pages; `docs/dockerhub/*.md` is the
+  source and can also be pasted in by hand.
 
 ---
 

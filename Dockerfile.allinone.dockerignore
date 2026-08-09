@@ -1,0 +1,25 @@
+# BuildKit reads `<dockerfile>.dockerignore` in preference to `.dockerignore`, which is the
+# whole reason this file exists: the root `.dockerignore` excludes `web/` (the `api` image has
+# no use for it), and this build compiles the frontend from the same context. Same exclusions
+# otherwise, plus web's own build outputs.
+.venv/
+.git/
+.omni/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+plans/
+docs/
+shots/
+specs/
+tests/
+node_modules/
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+web/*.tsbuildinfo
+*.md
+!README.md
