@@ -11,7 +11,7 @@ and returns a ranked shortlist where every quantitative claim is traceable to a 
 listing record. The booking form and the checkout are rendered as **MCP Apps** inside the chat;
 the catalogues, progress views and score breakdowns are drawn by the agent through **A2UI**.
 
-> 🎬 **[Interactive project walkthrough →](https://claude.ai/code/artifact/281ded89-fdde-4dd1-b252-3f8f4f89176b)**
+> 🎬 **[Interactive project walkthrough →](https://claude.ai/code/artifact/81808688-f447-4896-a656-d31f0f9dc50c)**
 > See what Cardinal does without cloning or running anything.
 
 ![The Cardinal showroom front page — a full-bleed photographic stage with the showcase car, asking price and monthly figure, and a verified-seller chip](docs/screenshots/showroom-front-page.png)
