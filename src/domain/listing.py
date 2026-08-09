@@ -28,6 +28,7 @@ from src.domain.enums import (
     TimingMechanism,
     Transmission,
     VehicleCategory,
+    VehicleCondition,
 )
 from src.domain.money import Money
 
@@ -112,11 +113,21 @@ class Listing(BaseModel):
     raw: dict[str, Any] = Field(min_length=1, description="Untouched upstream payload")
 
     # -- identity -----------------------------------------------------------------
+    #: PLAN-02 P13. Which business is selling this car -- `source` says which *integration*
+    #: fetched it, which is not the same fact and is not one a buyer can act on. Nullable so
+    #: P13's migration can land on a seeded database ahead of the re-seed that fills it;
+    #: gate 13.1 asserts zero orphans in a freshly generated catalogue.
+    dealer_id: uuid.UUID | None = None
+
     brand: str = Field(min_length=1)
     model: str = Field(min_length=1)
     variant: str = Field(min_length=1)
     year: int = Field(ge=1990, le=2100)
     category: VehicleCategory
+    #: PLAN-02 P13 / proposal doc #2. Defaults to `USED` rather than `NEW`: an unlabelled
+    #: second-hand car described as new is a claim nobody made, and the safe default for a
+    #: field a future adapter might not supply is the one that over-promises least.
+    condition: VehicleCondition = VehicleCondition.USED
 
     # -- commercial ---------------------------------------------------------------
     offer_type: OfferType
@@ -238,6 +249,7 @@ class ListingSummary(BaseModel):
     model: str
     year: int
     category: VehicleCategory
+    condition: VehicleCondition = VehicleCondition.USED
     offer_type: OfferType
     price_buy: Money | None = None
     rental_daily: Money | None = None
@@ -257,6 +269,7 @@ class ListingSummary(BaseModel):
             model=listing.model,
             year=listing.year,
             category=listing.category,
+            condition=listing.condition,
             offer_type=listing.offer_type,
             price_buy=listing.price_buy,
             rental_daily=listing.rental_rates.daily if listing.rental_rates else None,

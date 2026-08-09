@@ -18,9 +18,15 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from src.adapters.catalogue.generator import DEFAULT_SEED, DEFAULT_TOTAL, generate_catalogue
-from src.adapters.db.mapping import to_row
-from src.adapters.db.models import ListingRow
+from src.adapters.catalogue.dealers import generate_dealers
+from src.adapters.catalogue.generator import (
+    DEFAULT_SEED,
+    DEFAULT_TOTAL,
+    SOURCES,
+    generate_catalogue,
+)
+from src.adapters.db.mapping import dealer_to_row, to_row
+from src.adapters.db.models import DealerRow, ListingRow
 from src.adapters.db.session import (
     dispose_engine,
     resolved_database_url,
@@ -35,6 +41,13 @@ _MUTABLE_COLUMNS = tuple(
     column.name
     for column in ListingRow.__table__.columns
     if column.name not in {"id", "source", "source_id"}
+)
+
+#: Same upsert shape for the dealer directory (PLAN-02 P13), keyed on its own natural key.
+_MUTABLE_DEALER_COLUMNS = tuple(
+    column.name
+    for column in DealerRow.__table__.columns
+    if column.name not in {"id", "source", "dealer_ref"}
 )
 
 
@@ -62,6 +75,22 @@ async def seed(
             if verbose:
                 print(f"listings table already has {existing} rows; --if-empty, nothing to do")
             return existing, False
+
+        # Dealers first, and committed before the listings that reference them: PLAN-02 P13
+        # put a real foreign key on `listings.dealer_id`, so a listing whose dealer is not
+        # in the table yet is rejected outright rather than stored with a dangling id.
+        for dealer in generate_dealers(seed_value, SOURCES):
+            drow = dealer_to_row(dealer)
+            dvalues = {
+                column.name: getattr(drow, column.name) for column in DealerRow.__table__.columns
+            }
+            dstmt = insert(DealerRow).values(**dvalues)
+            dstmt = dstmt.on_conflict_do_update(
+                index_elements=[DealerRow.source, DealerRow.dealer_ref],
+                set_={name: dstmt.excluded[name] for name in _MUTABLE_DEALER_COLUMNS},
+            )
+            await session.execute(dstmt)
+        await session.flush()
 
         for listing in listings:
             row = to_row(listing)

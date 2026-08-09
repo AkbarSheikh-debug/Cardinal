@@ -10,6 +10,7 @@
  * A2UI's client-enforced catalog model exists to prevent.
  */
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { z } from "zod";
 import { createComponentImplementation, type ReactComponentImplementation } from "./adapter";
 
@@ -84,8 +85,105 @@ const CarCardApi = {
     posterSrc: z.string().optional(),
     // True when `modelSrc` is a body-style silhouette rather than a model of this actual car.
     representative: z.boolean().optional(),
+    // A real reference photo of this model (vehicle_models.vehicle_photo_src), when sourced.
+    // Takes over the poster slot below -- a real photo beats a generated GLB/silhouette still.
+    photoSrc: z.string().optional(),
+    // PLAN-02 P13 (proposal doc #4/#2): who is selling this, and what condition it is in.
+    // Every one optional and mirrored in `src/mcp/ui/catalog.py`'s server-side spec -- a prop
+    // registered on one side only is rejected by the other (CONSTITUTION II.4).
+    dealerName: z.string().optional(),
+    dealerCity: z.string().optional(),
+    dealerRating: z.number().optional(),
+    dealerVerified: z.boolean().optional(),
+    condition: z.string().optional(),
+    // PLAN-02 P14: what an add-to-cart click on this card means. Read off the listing
+    // server-side (`CardVisual.offer_type`), never guessed here -- a card that assumed `buy`
+    // for a rental-only listing would render a button whose click always 409s.
+    offerType: z.string().optional(),
   }),
 };
+
+const CONDITION_LABEL: Record<string, string> = {
+  new: "New",
+  used: "Used",
+  certified_pre_owned: "Certified pre-owned",
+};
+
+/**
+ * A real reference photo of the model, with click-to-fullscreen.
+ *
+ * Rendered as an actual `<img>` rather than handed to `<model-viewer poster>`: a poster is
+ * letterboxed into the viewer's own aspect box (which is what made a wide photo show up as a
+ * small centred square), and it can't be opened. This fills the card's visual slot and blows
+ * up to fit the screen on click.
+ *
+ * The overlay goes through a portal to `document.body` on purpose -- `.cardinal-car-card`
+ * runs a `transform`-based entry animation, and a transformed ancestor becomes the containing
+ * block for `position: fixed`, so an in-place overlay would be trapped inside the card.
+ */
+function CarPhoto({ src, alt }: { src: string; alt: string }): React.ReactElement {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    // The page behind a fullscreen image should not scroll under it.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  return (
+    <>
+      {/* stopPropagation throughout: the whole card is already an `explain` click target, and
+          opening a photo must not also fire the score-breakdown round-trip. */}
+      <button
+        type="button"
+        className="cardinal-car-photo-button"
+        aria-label={`View full-screen photo of ${alt}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(true);
+        }}
+      >
+        <img className="cardinal-car-photo" src={src} alt={alt} loading="lazy" />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            className="cardinal-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label={alt}
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen(false);
+            }}
+          >
+            <img className="cardinal-lightbox-image" src={src} alt={alt} />
+            <button
+              type="button"
+              className="cardinal-lightbox-close"
+              aria-label="Close full-screen photo"
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(false);
+              }}
+            >
+              ✕
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
 
 // Clicking a card dispatches an `explain` action through `ComponentContext.dispatchAction`
 // (PHASE-6 SS6's action round-trip) -- `App.tsx`'s `postAction` relays it to
@@ -108,35 +206,108 @@ const CarCard = createComponentImplementation(CarCardApi, ({ props, context }) =
       })
     }
   >
-    {props.modelSrc && (
+    {(props.photoSrc || props.modelSrc) && (
       <div className="cardinal-car-viewer">
         {/*
-          `reveal="interaction"` and a always-present `poster` are gate 6.8's requirement for
+          A real photo of the model wins the visual slot when one was sourced. Below it, the
+          3D viewer is kept only when `modelSrc` is a model of this actual car -- for the far
+          more common silhouette case the photo already says everything a generic body-style
+          shape would, and stacking both just makes the card taller.
+
+          `reveal="interaction"` and an always-present `poster` are gate 6.8's requirement for
           any list context: N cards on screen must not mean N GLB downloads before the user
           has shown interest in any of them. `auto-rotate` stays off here for the same reason
           -- PHASE-6 SS5 reserves it for a dedicated full-screen explainer surface.
         */}
-        <model-viewer
-          src={props.modelSrc}
-          poster={props.posterSrc}
-          alt={props.headline ?? `${props.source}:${props.sourceId}`}
-          camera-controls
-          reveal="interaction"
-          shadow-intensity="1"
-          environment-image="neutral"
-        />
+        {props.photoSrc && (
+          <CarPhoto
+            src={props.photoSrc}
+            alt={props.headline ?? `${props.source}:${props.sourceId}`}
+          />
+        )}
+        {props.modelSrc && !(props.photoSrc && props.representative) && (
+          <model-viewer
+            src={props.modelSrc}
+            poster={props.posterSrc}
+            alt={props.headline ?? `${props.source}:${props.sourceId}`}
+            camera-controls
+            reveal="interaction"
+            shadow-intensity="1"
+            environment-image="neutral"
+          />
+        )}
         <p className="cardinal-representative-label">
-          {props.representative
-            ? "Body style shown for reference -- not this specific vehicle."
-            : "Representative model -- not this specific vehicle."}
+          {props.photoSrc
+            ? "Representative photo of this model -- not this specific vehicle."
+            : props.representative
+              ? "Body style shown for reference -- not this specific vehicle."
+              : "Representative model -- not this specific vehicle."}
         </p>
       </div>
     )}
     <h3>
       #{props.rank} {props.headline ?? `${props.source}:${props.sourceId}`}
     </h3>
+    {props.condition && (
+      <span className="cardinal-condition" data-condition={props.condition}>
+        {CONDITION_LABEL[props.condition] ?? props.condition}
+      </span>
+    )}
     <p className="cardinal-score">score {props.score.toFixed(2)}</p>
     <p className="cardinal-rationale">{props.rationale}</p>
+    {/* PLAN-02 P13: dealer attribution. Rendered only when the listing actually resolves to
+        a dealer -- an empty "Sold by" line reads as a bug, and a missing one reads as a card
+        that predates the P13 re-seed, which is what it is. */}
+    {props.dealerName && (
+      <p className="cardinal-dealer" data-testid="car-card-dealer">
+        <span className="cardinal-dealer-name">{props.dealerName}</span>
+        {props.dealerCity && <span className="cardinal-dealer-city">{props.dealerCity}</span>}
+        {props.dealerRating !== undefined && (
+          <span className="cardinal-dealer-rating">{props.dealerRating.toFixed(1)}★</span>
+        )}
+        {/* Verified is a positive claim; anything else is stated as unverified rather than
+            left blank. Silence about who you are paying is the thing P14's payee disclosure
+            exists to prevent, and the card is the first place that question comes up. */}
+        <span
+          className="cardinal-dealer-verified"
+          data-verified={props.dealerVerified === true ? "yes" : "no"}
+        >
+          {props.dealerVerified === true ? "Verified dealer" : "Unverified"}
+        </span>
+      </p>
+    )}
+    {/* PLAN-02 P14. Dispatched through P6's existing action round-trip -- the same
+        `dispatchAction` -> `POST /sessions/{id}/actions` path gate 6.5 already proves -- and
+        NOT a second channel. `App.tsx`'s handler is what turns it into an authenticated
+        `POST /cart/items`, using the buyer's own httpOnly cookie: a credential this browser
+        has and the agent process does not, which is what makes gate 14.7 ("no agent-driven
+        path adds to cart") a property of where the credential lives rather than a rule
+        somebody has to enforce.
+
+        `stopPropagation` because the whole card is already an `explain` click target -- an
+        add that also expanded the score breakdown would look like a misfire. */}
+    {props.offerType && (
+      <button
+        type="button"
+        className="cardinal-add-to-cart"
+        data-testid={`add-to-cart-${props.source}-${props.sourceId}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          context.dispatchAction({
+            event: {
+              name: "add_to_cart",
+              context: {
+                source: props.source,
+                sourceId: props.sourceId,
+                offerType: props.offerType,
+              },
+            },
+          });
+        }}
+      >
+        {props.offerType === "rent" ? "Add to cart to rent" : "Add to cart"}
+      </button>
+    )}
   </article>
 ));
 

@@ -17,6 +17,7 @@ from claude_agent_sdk import create_sdk_mcp_server
 from claude_agent_sdk.types import McpSdkServerConfig
 
 from src.adapters.booking_store import BookingStore
+from src.adapters.dealer_store import DealerDirectory
 from src.adapters.payments.protocol import PaymentGateway
 from src.adapters.store import ListingStore
 from src.mcp.audience import Audience, for_audience
@@ -33,6 +34,7 @@ def build_booking_server(
     session_id: str = "unbound",
     sink: UISink | None = None,
     store: ListingStore | None = None,
+    dealers: DealerDirectory | None = None,
     booking_store: BookingStore | None = None,
     payment_gateway: PaymentGateway | None = None,
 ) -> McpSdkServerConfig:
@@ -40,6 +42,7 @@ def build_booking_server(
         session_id=session_id,
         sink=sink,
         store=store,
+        dealers=dealers,
         booking_store=booking_store,
         payment_gateway=payment_gateway,
     )

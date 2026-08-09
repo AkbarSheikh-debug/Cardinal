@@ -273,8 +273,6 @@ def _search_page_payload(tool_response: Any) -> dict[str, Any] | None:
     return payload
 
 
-
-
 def extract_candidate_ids(messages: Iterable[Any]) -> tuple[str, ...]:
     """Every `"source:source_id"` any `search_cars` call in this turn returned, in order, with
     duplicates dropped -- what `phase_machine._exit_predicate_met` needs to let RESEARCH end.

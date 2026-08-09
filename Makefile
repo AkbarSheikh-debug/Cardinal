@@ -1,5 +1,5 @@
-PYTHON ?= python
-PHASES := 0 1 2 3 4 5 6 7 8 9 10 11
+﻿PYTHON ?= python
+PHASES := 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
 
 .PHONY: help dev test lint typecheck verify gate gates seed migrate up down clean
 
@@ -31,7 +31,7 @@ typecheck:  ## mypy, strict on the domain
 gate:  ## make gate PHASE=1
 	$(PYTHON) -m scripts.gate_phase$(PHASE)
 
-gates:  ## every gate, 0..11, stopping at the first red one
+gates:  ## every gate, 0..16, stopping at the first red one
 	@for p in $(PHASES); do $(PYTHON) -m scripts.gate_phase$$p || exit 1; done
 
 verify: lint typecheck test gates  ## everything, chained

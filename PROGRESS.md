@@ -20,6 +20,752 @@ never "the code looks right" (CONSTITUTION III.1).
 | **9 — OBSERVABILITY** | `[MVP-bonus]` done, `[SCALE]` deferred | **7 PASS, 2 PENDING** |
 | **10 — TRUST** | `[MVP]` done, `[SCALE]` deferred | **4 PASS, 5 PENDING** |
 | **11 — DELIVERY** | `[MVP]` done, `[SCALE]` deferred | **8 PASS, 3 PENDING** |
+| **12 — IDENTITY** | ✅ **Done** — `[MVP]` complete, `[SCALE]` deferred | **10 PASS, 1 PENDING** |
+| **13 — DEALER** | ✅ **Done** | **8/8 PASS** |
+| **14 — CART** | ✅ **Done** | **12/12 PASS** |
+| **15 — SELLER CONSOLE** | ✅ **Done** | **10/10 PASS** |
+| **16 — VOICE** | ✅ **Done** — `[MVP]` complete, `[SCALE]` deferred | **11 PASS, 1 PENDING** |
+| **Design system + front page** | ✅ **Done** — Paddock Green; not a phase, no gate of its own | **every existing gate re-run green** |
+| **Demo-banner removal** | ✅ **Done** — D-091; CONSTITUTION I.5 revised | **17/17 gates re-run green** |
+
+---
+
+## Demo-banner removal ✅ — D-091
+
+Removed the four on-screen mock/demo disclosure banners at the product owner's request: the
+`DEMO AUTH` strip and visible OTP codes on `/login`, the front-page announcement bar, and
+`MOCK — NO REAL PAYMENT` on checkout. The fourth is the one CONSTITUTION I.5 named explicitly;
+confirmed as a deliberate choice after being told it would override the constitution and turn
+gate 8.10 red. Full reasoning, and what stayed honest underneath (the API still discloses the
+banner text and demo codes in JSON; the MCP resource description still says "MOCK"; README and
+DECISIONS.md still state it in prose), is in D-091.
+
+Found and fixed in the same pass, reported by the product owner from a live screenshot: three
+`<select>` elements (`login-form select`, the shared `.ui-select`, `.voice-picker`) rendered
+their open option list as white text on the browser's own unstyled white popup — invisible,
+not merely low-contrast, because `color` set on a closed `<select>` does not reach the popup
+surface the browser paints for `<option>`. Fixed by styling `option` directly at all three call
+sites.
+
+```
+GATE 0  GREEN            GATE 6  GREEN (1 pending)     GATE 12 GREEN (2 pending)
+GATE 1  GREEN            GATE 7  GREEN                 GATE 13 GREEN
+GATE 2  GREEN (1 pend)   GATE 8  GREEN                 GATE 14 GREEN  12/12
+GATE 3  GREEN (1 pend)   GATE 9  GREEN (2 pending)     GATE 15 GREEN  10/10
+GATE 4  GREEN (6 pend)   GATE 10 GREEN (5 pending)     GATE 16 GREEN (1 pending)
+GATE 5  GREEN (1 pend)   GATE 11 GREEN (6 pending)
+```
+
+Plus ruff, `ruff format --check` (201 files), `mypy --strict src/domain`, `mypy` over
+agent/adapters/api/mcp, and 880 tests passing / 64 skipped — all clean.
+
+### What shipped
+
+| Area | Files |
+|---|---|
+| Banner removal | `web/src/auth/LoginPage.tsx`, `web/src/routes.tsx`, `web/src/showroom/ShowroomPage.tsx`, `src/mcp/booking/static/checkout.html` |
+| CSS cleanup | `web/src/styles.css`, `web/src/showroom/showroom.css` — `.demo-banner`, `.demo-codes`, `#mock-banner`, `.showroom-announce*` rules removed |
+| The `<select>` fix | `web/src/styles.css` (`.login-form select option`, `.voice-picker option`), `web/src/ui/ui.css` (`.ui-select option`) |
+| Constitution | `CONSTITUTION.md` I.5 revised in place with the override recorded, not deleted |
+| Gates re-scoped | `scripts/gate_phase8.py` (8.10), `scripts/gate_phase12.py` (12.2) — criteria renamed to what they now check |
+| Specs | `tests/auth.spec.ts`, `tests/commerce.spec.ts`, `tests/cart.spec.ts`, `tests/demo-e2e.spec.ts`, `tests/open-app.spec.ts` |
+| README | Accounts-and-login row reworded: dummy, disclosed in the API rather than on screen |
+
+### Worth knowing
+
+- **Gate 8.10 and 12.2 now assert absence, not presence.** Each spec confirms the removal was
+  deliberate and complete — no banner text anywhere in the rendered page — rather than simply
+  deleting the assertion and leaving the criterion number pointing at nothing.
+- **The apparent gate 14 failure on the first re-run was resource contention, not a
+  regression.** A dozen leftover Vite/Playwright/uvicorn processes had accumulated across the
+  session on ports 5199–5201 and 8000/8200; killing them and re-running gates 8 and 14 alone
+  produced clean green. Worth remembering: a cascading "everything failed" result across
+  unrelated browser criteria is a environment-contention smell before it's a code smell.
+
+---
+
+## Design system + front page ✅ — Paddock Green
+
+Not a phase and it has no gate of its own, so the only honest evidence is that **every gate that
+already existed was re-run and is still green**. Two passes landed here, in order: a white
+Cohere canvas (D-089) and then the dark, photographic **Paddock Green** re-theme the product
+owner handed off (D-090). What is described below is what is in the tree now. Re-run on
+2026-08-09, after the re-theme.
+
+```
+GATE 0  GREEN            GATE 6  GREEN (1 pending)     GATE 12 GREEN (2 pending)
+GATE 1  GREEN            GATE 7  GREEN                 GATE 13 GREEN
+GATE 2  GREEN (1 pend)   GATE 8  GREEN                 GATE 14 GREEN  12/12
+GATE 3  GREEN (1 pend)   GATE 9  GREEN (2 pending)     GATE 15 GREEN  10/10
+GATE 4  GREEN (6 pend)   GATE 10 GREEN (5 pending)     GATE 16 GREEN (1 pending)
+GATE 5  GREEN (1 pend)   GATE 11 GREEN (6 pending)
+```
+
+Plus `ruff check`, `ruff format --check` (201 files), `mypy --strict src/domain` and `mypy` over
+`agent/adapters/api/mcp` — all clean — and 880 tests passing, 64 skipped.
+
+**The re-theme required no spec changes at all.** Every gate that had to be repaired belonged to
+the earlier route move (D-088), not to the colour: gate 12 needed two real code fixes and gate
+14.1 asserted the chat's URL. That the paddock pass touched no test is the strongest available
+evidence that it really was a token edit rather than a rewrite.
+
+### What shipped
+
+| Area | Files |
+|---|---|
+| Token layer | `web/src/ui/tokens.css` — Paddock Green palette (`--pg-*`) published under shadcn's semantic token names, over Cohere's radius/spacing/type ladders, plus the legacy `--bg`/`--text`/`--line`/`--accent` aliases `styles.css` reads |
+| Component kit | `web/src/ui/` — `Button`, `Card` (7 parts), `Badge`, `Input`/`Textarea`/`Select`/`Label`/`Field`, `Separator`, `Tabs` (full WAI-ARIA tabs: roving tabindex, orientation-aware arrows, Home/End), `cn`, `Slot`, `ui.css`. No new npm dependency |
+| Front page | `web/src/showroom/{ShowroomPage.tsx,showroom-data.ts,showroom.css}` — full-bleed photographic stage with a left-to-right scrim, eyebrow → two-line display headline → blurb → price pair → two CTAs, an overlaid spec rail with a verified-seller chip, capability row, trust band, footer |
+| Photography | `web/public/showroom/hero-paddock-{1280,1920,3840}.{jpg,webp}` (2.4:1 band cropped from a 5756×4000 source) and `login-m5-{620,1240}.{jpg,webp}`; `<picture>` with WebP first, `fetchPriority="high"` on the LCP image |
+| Routes | `web/src/routes.tsx` (`/` showroom, `/chat` agent), `web/src/SiteHeader.tsx`, `web/src/auth/destination.ts` |
+| Two-column sign-in | `web/src/auth/LoginPage.tsx` — existing JSX wrapped in `.login-col`, plus a decorative `aria-hidden` photo column. No field, validation or handler changed |
+| Empty canvas | `web/src/App.tsx` — `PhaseBars` / `PhaseLabels`, derived from the `phase` the SSE stream already reports; replaced three shimmering placeholder bars |
+| Restyle | `web/src/styles.css` — ambient mesh re-tuned, header/rail/composer/cart/seller surfaces, flat coral demo banner, mint/coral tier and signal treatment |
+| Seller detail | `web/src/seller/SellerConsole.tsx` — contribution sign derived rather than hardcoded, `data-sign` on each signal row |
+
+Design sources: the **Paddock Green handoff** (`design_handoff_paddock_green_theme/`) for the
+colour, layout and photography; `shadcn-ui/ui` (`registry/new-york-v4`) for the component anatomy
+and token vocabulary; Cohere (`VoltAgent/awesome-design-md`) for the radius, spacing and type
+ladders, which the re-theme left untouched.
+
+### Worth knowing
+
+- **The token layer is the whole trick, and it has now been tested twice.** White → paddock green
+  was one file plus four things that encoded an assumption about the *ground* rather than a
+  colour: the ambient mesh, the shadow scale, `--danger` reaching `.tier-high`, and the
+  demo-auth banner's translucency. See D-090.
+- **CSS import order in `main.tsx` is load-bearing.** The three stylesheets sit *above* the
+  `routes` import. Vite emits CSS in module-graph order, so importing `routes` first pulled
+  `showroom.css` in ahead of the kit and let `ui.css` override the page composing it.
+- **`live-chat.spec.ts` and `model-picker.spec.ts` were already broken by D-085** and nobody had
+  noticed: both opened `/` anonymously and waited for the chat input. They are not in any gate
+  (`playwright.live.config.ts` is run by hand against a keyed stack). Fixed rather than left.
+
+### Deferred, deliberately
+
+- **The showroom is a showcase, not a listing.** Its performance figures are BMW's published
+  numbers; the asking price, monthly, mileage and seller are illustrative, and the ⓘ control
+  says so. Wiring the hero to a real `Listing` — so the CTA opens the agent already holding that
+  car — is the obvious next step and is not built.
+- **No cart-line photo thumbnail.** Listed as optional in the handoff. Cart lines carry no
+  photograph in the data model, and putting a picture of a car that is not the car beside a
+  payee disclosure would undercut the most carefully honest surface in the product (D-090).
+- **Light theme removed.** The design commits to one visual world; `color-scheme: dark`.
+- **The `[SCALE]` lines in every phase above are untouched.** Both design passes were
+  presentation only: no domain, agent, MCP or adapter code changed.
+
+---
+
+## Phase 16 — Voice ✅
+
+`plans/PLAN-02-MARKETPLACE.md`'s last phase, and the only one whose whole design is a failure
+mode. Run on 2026-08-09 with the voice environment **scrubbed** — every criterion proves the
+*cascade*, not that ElevenLabs is reachable. That is deliberate: a criterion needing a funded
+account could only ever run on one machine, which is the opposite of what a gate is for.
+
+```
+==============================================================================
+GATE 16 -- VOICE -- three-tier cascade, picker, push-to-talk
+==============================================================================
+  16.1   PASS     all three controls work independently; state survives a reload
+           web/tests/voice.spec.ts passed in a real Chromium -- stats={'expected': 4,
+           'unexpected': 0, 'flaky': 0, 'skipped': 0}
+  16.2   PASS     DEMO_MODE completes a voice turn with every voice env var unset (tier 2)
+           transcribe -> 200 tier='browser' text="I'm looking for a family SUV, budget
+           a"...; speak -> 204 (browser speaks); ELEVENLABS/GROQ/OPENAI keys all unset
+  16.3   PASS     with a provider wired, a voice turn is served by tier 1
+           speak -> 200 X-Voice-Tier='provider'; transcribe -> 200 tier='provider' (stub
+           provider: this asserts tier *selection*, not ElevenLabs reachability)
+  16.4   PASS     a mid-session quota error drops to tier 2 without a reload or a dead control
+           three consecutive utterances served ['provider', 'browser', 'provider'] -- the
+           quota failure degraded the second only; no reload, and tier 1 resumed on the third
+  16.5   PASS     a denied mic falls to tier 3 with no turn or phase state lost
+           select_tier(provider=False, browser=False) -> 'text';
+           /voice/capabilities?browser=false reports text for both directions
+  16.6   PASS     a TTS failure never blocks or delays the text reply
+           a raising synthesiser produced 204 X-Voice-Tier='browser', never a 5xx
+  16.7   PASS     the transcript is shown for confirmation, never auto-sent
+           transcribe created 0 turns; web/src/voice/api.ts contains no reference to
+           postMessage, so no code path runs mic -> turn
+  16.8   PASS     the picker offers provider voices only when a provider exists
+           no key -> 1 voice ('System voice'); provider wired -> 4 voices, 3 of them tier 1
+  16.9   PASS     every voice call records which tier served it, as a span attribute
+           voice.speak tier='provider', voice.transcribe tier='provider' -- 'the voice
+           sounded worse today' is falsifiable
+  16.10  PASS     .env.example documents every voice variable the code reads
+           4 voice variables, all present in .env.example
+  16.11  PASS     no provider key value appears in source, deps or either lockfile
+           206 files scanned for 4 live-credential prefixes, 0 hits -- every key is read
+           from the environment at call time
+  16.12  PENDING  [SCALE] barge-in and streaming TTS as the agent composes
+           barge-in (interrupting the agent mid-sentence) and streaming synthesis are
+           PLAN-02 P16's own [SCALE] lines -- deferred per CONSTITUTION III.3
+------------------------------------------------------------------------------
+  11 passed, 0 failed, 1 pending
+  GATE 16 GREEN (with 1 pending)
+==============================================================================
+```
+
+### What shipped
+
+| Area | Files |
+|---|---|
+| Tier vocabulary + pure selection | `src/domain/voice.py` — `VoiceTier`, `TIER_ORDER`, `select_tier` (total), `next_tier`, `VoiceOption`, `VoiceCapabilities`, `Utterance` |
+| Provider seams | `src/adapters/voice/protocol.py` — `SpeechSynthesizer`/`SpeechTranscriber`, `VoiceError`/`QuotaExhausted`, `env_key` (empty string counts as unset) |
+| Tier-1 providers | `src/adapters/voice/providers.py` — `ElevenLabsSynthesizer` (`eleven_turbo_v2_5`, voice-id fallback chain, quota detection by body marker), `WhisperTranscriber` (Groq first, OpenAI as the paid fallback *within* tier 1) |
+| The cascade | `src/adapters/voice/cascade.py` — per-call tier selection, `DEMO_TRANSCRIPTS` cycling **per session**, `MIN_AUDIO_BYTES` guard |
+| Transport | `src/api/voice.py` — `GET /voice/capabilities`, `POST /voice/speak`, `POST /voice/transcribe`; `X-Voice-Tier` on every response, `voice.tier` on every span |
+| Frontend | `web/src/voice/{recorder.ts,api.ts,VoiceControls.tsx}`, wired into `web/src/App.tsx`; `web/src/styles.css` (+P16 block) |
+| Config | `.env.example` — the four voice variables, documented with the cascade table |
+| Gate | `scripts/gate_phase16.py`, `web/tests/voice.spec.ts`, `web/playwright.voice.config.ts` |
+| Tests | `tests/unit/test_voice_cascade.py` (22), `tests/integration/test_api_voice.py` (9) |
+
+**Four implementation details came from studying a prior voice project** (`D:\Interview Agent`)
+rather than from the plan, and each one is a bug that would otherwise have been found late:
+
+- **The recording MIME type must be probed, not assumed.** Safari supports neither
+  `audio/webm` nor Opus; hardcoding either yields a `MediaRecorder` that constructs and then
+  produces nothing. `web/src/voice/recorder.ts` walks `isTypeSupported` in preference order.
+- **`MediaRecorder.start(250)`.** With no timeslice a short press can emit a single empty
+  `dataavailable` at stop, producing a 0-byte blob and a baffling "too short" error.
+- **A minimum-bytes guard before spending a provider call.** Under 500 bytes there is no
+  speech; asking anyway costs a call and returns an empty transcript that reads to the user as
+  "it ignored me".
+- **The upload's filename extension is load-bearing.** Whisper's multipart endpoints key off
+  it rather than the part's content-type, so `speech.bin` is rejected as an unsupported format
+  even with a correct MIME type. Mirrored on both sides (`_extension` / `api.ts`).
+
+Two things that project does were **deliberately not ported**: its multi-provider *LLM* router
+(Cardinal's reasoning stays on the Claude Agent SDK — voice is transport, it does not change
+who does the thinking) and its anxiety-detection heuristic (interview-specific, and the kind of
+inference about a person this product has no basis to make).
+
+One improvement on the source: its demo transcripts advance from a single module-level counter,
+so two browsers open at once interleave and each sees half a script. Cardinal's cursor is keyed
+per session (asserted by
+`test_demo_transcripts_advance_per_session_not_globally`).
+
+### Deferred, deliberately
+
+- **`[SCALE]` Barge-in and streaming TTS** — gate 16.12. Interrupting the agent mid-sentence
+  needs an audio pipeline that can be cancelled cleanly; PLAN-02 P16's own `[SCALE]` line.
+- **`[SCALE]` Per-listing audio summaries.**
+- **A live rehearsal with real ElevenLabs/Groq keys.** Every mechanism here is proven against
+  stub providers and the scrubbed-environment path — which is the honest, portable thing to
+  gate — but nobody has yet heard tier 1 actually speak. **Set the keys before recording the
+  demo video**: tier 1 is the version worth showing, and the cascade means the repo still
+  passes on a machine that has never seen a key.
+
+---
+
+---
+
+## Phase 15 — Seller console ✅
+
+`plans/PLAN-02-MARKETPLACE.md`'s fourth phase, and the seller-facing half of the product. Run
+on 2026-08-09. 15.1/15.2/15.3/15.5/15.7/15.9 are pure Python (the scorer is a pure function;
+the routes run through the real FastAPI app via `TestClient`). 15.4/15.6/15.8/15.10 drive a
+real Chromium with **two browser contexts** — a buyer and a seller signed in simultaneously,
+which is the only way to assert that an action in one reaches the other — against a backend
+`scripts/gate_phase15.py` starts itself on :8125 with the environment scrubbed to
+`DEMO_MODE=true`.
+
+```
+==============================================================================
+GATE 15 -- SELLER CONSOLE -- lead routing, intent tiers, privacy
+==============================================================================
+  15.1   PASS     every qualifying action produces exactly one Lead, routed to the car's dealer
+           3 actions on one car -> 1 lead carrying ['cart_add', 'checkout_opened']; a second
+           car -> a second lead; both routed to the dealer that owns them (['AB-1001',
+           'AB-1011'])
+  15.2   PASS     the tier is deterministic: same signals, same tier and score, twice
+           score=0.817345 tier=high byte-identical across two runs; event order irrelevant;
+           imports ['__future__', 'datetime', 'decimal', 'src'] all stdlib/pydantic/domain
+  15.3   PASS     every tier traces to named signals whose contributions sum to the score (1e-9)
+           36 lead shapes checked across 3 event sets x 4 target dates x 3 budget cases; worst
+           |score - sum(contributions)| = 0.00e+00; every signal named, weighted and explained
+  15.4   PASS     a new lead reaches an open /seller/events stream, no reload
+           15.4 a new lead reaches an open /seller/events stream without a reload
+  15.5   PASS     seller A never sees seller B's leads -- scoped inside the query, not after it
+           A=1 lead, B reads 0; B's POST on A's lead id -> 404 and changed nothing; anonymous
+           -> 401; no seller route takes a dealer id (['/seller/dealers', '/seller/events',
+           '/seller/leads', '/seller/leads/{lead_id}/contacted']); every LeadStore read
+           requires one
+  15.6   PASS     a browsing buyer produces no lead and exposes no contact details
+           15.6 a buyer who only browsed produces no lead and exposes no contact details
+  15.7   PASS     income_band appears nowhere in any seller-facing payload
+           buyer holds EUR 88,000 / band '50k_100k' / employer on file; 7 terms scanned across
+           4 seller-facing payloads (['/seller/dealers', '/seller/leads', '/seller/profile',
+           'contacted']), 0 hits
+  15.8   PASS     every tier renders as an estimate with its reasoning attached
+           15.8 every tier renders as an estimate with its reasoning, never as an assertion
+  15.9   PASS     no income band can change a lead's score -- undisclosed, disclosed or absent
+           the scorer has no income parameter and rejects one for all 5 bands + None; three
+           buyers differing only in income (none / EUR 250k / EUR 18k) all scored 0.294000
+  15.10  PASS     DEMO_MODE drives a buyer action to a live seller dashboard, no keys
+           15.10 DEMO_MODE drives a buyer action to a live seller dashboard with no keys
+------------------------------------------------------------------------------
+  10 passed, 0 failed, 0 pending
+  GATE 15 GREEN
+==============================================================================
+```
+
+Without `web/node_modules` + Chromium the four browser criteria report `PENDING` (gate 6.2's
+convention) and the other six still run.
+
+### What shipped
+
+| Area | Files |
+|---|---|
+| Lead domain | `src/domain/lead.py` — `Lead` (id derived by `lead_uuid`, events a set, `min_length=1`), `LeadEvent`, `LeadState`, `IntentTier` (+`label`/`guidance`), `LeadSignal`, `LeadScore` (sum-check), `SLA_WINDOWS`/`sla_deadline`/`is_overdue` |
+| Lead scoring | `src/domain/lead_scoring.py` — seven weighted signals summing to 1.0, three normalisers, `tier_for`, `explain`. Pure: stdlib + pydantic only, asserted by gate 15.2 |
+| Stores | `src/adapters/lead_store.py` (`LeadStore` protocol — **every read takes a `dealer_id`, there is no "all"** — `InMemoryLeadStore`, `ScoreFn`), `src/adapters/db/lead_store.py` (`PostgresLeadStore`, dual-storage, `ON CONFLICT` upsert) |
+| Schema | `migrations/versions/0006_leads.py` — `leads` keyed on `lead_uuid`, indexed on `dealer_id` and `(dealer_id, state)`; `LeadRow` in `src/adapters/db/models.py` |
+| The lead seam | `src/api/leads.py` — `record_lead` (the one place a buyer action becomes a lead; never raises), `requirement_summary`, `lead_payload` (the seller-facing projection, built field by field), `_listing_payload` (headline + current price, resolved on read) |
+| Seller transport | `src/api/seller.py` — `GET /seller/leads`, `GET /seller/events` (SSE), `POST /seller/leads/{id}/contacted`, `GET /seller/dealers`, `SellerEventHub` (one `QueueUISink` per *dealer*), `_analytics` |
+| Hooks | `src/api/cart.py` (cart-add, checkout-opened), `src/api/main.py` (`_record_draft_lead` on `submit_booking_draft`) |
+| Seller↔dealer link | `src/api/auth.py` — `_validate_dealer_claim`; `web/src/auth/LoginPage.tsx` — the dealership picker |
+| Console | `web/src/seller/{api.ts,SellerConsole.tsx}`, `web/src/routes.tsx` (the P12 placeholder replaced), `web/src/styles.css` (+P15 block) |
+| Proxy config | `web/nginx.conf` (`location = /seller/events` **unbuffered**, before `location /seller/`) and `web/vite.config.ts` (`"/seller/"`) — D-076's collision again |
+| Gate | `scripts/gate_phase15.py`, `web/tests/seller.spec.ts`, `web/playwright.seller.config.ts` |
+| Tests | `tests/unit/test_domain_lead.py` (20), `tests/unit/test_domain_lead_scoring.py` (32), `tests/unit/test_adapters_lead_store.py` (12), `tests/integration/test_api_seller.py` (19), `tests/integration/test_adapters_lead_store_postgres.py` (7, live Postgres) |
+
+Four things surfaced while building this that were not in the plan:
+
+- **Income cannot be a scoring signal and stay off the seller's screen.** The plan asks for
+  both: every contributing signal visible and summing to the score (§0.5, gate 15.3), and the
+  income band never shown (§P15, gate 15.7). Showing it leaks; hiding one row lets the seller
+  subtract; blending it into "affordability" is invertible by a dealer who reads the
+  open-source scorer next to the budget the console already shows them. **Income left the
+  score** — the tier answers *how soon*, not *how much* — and gate 15.9 now asserts the
+  stronger property: no band, disclosed or otherwise, can reach or move a lead score
+  (DECISIONS.md D-079). This is a deliberate departure from the plan's signal table.
+- **`SellerProfile.dealer_id` was never populated.** P13's scope listed it; P13's gate 13.6
+  became a different criterion and nothing ever set the field, so every seller account had
+  `dealer_id=None` and there was nothing to route a lead to. P15 adds the dealership picker
+  at signup, validated against the directory but deliberately not *authorised* — with demo
+  auth a check that enforces nothing is theatre (D-080).
+- **Opening a `TestClient(app)` re-runs the app's lifespan and rebuilds `app.state`.** Gate
+  15.9's first run reported "expected 3 leads, got 1" because each buyer client was opened
+  inside the loop, wiping the lead store between writes. Every client is now opened before any
+  of them writes. Worth remembering for any future gate that needs more than two simultaneous
+  clients.
+- **`/seller/events` needs its nginx block *before* `location /seller/`.** nginx's
+  longest-prefix rule would otherwise hand the SSE path to the buffered block and the console's
+  live feed would appear dead with nothing in any log. Same family as D-057 and D-076.
+- **Replacing P12's `/seller` placeholder turned gate 12.2 red.** `auth.spec.ts` asserts a
+  heading reading "Seller console" after a seller signs in — and that spec's seller picks no
+  dealership, so the real console's first draft showed the *person's* name instead. Fixed in
+  the console rather than in the spec: the heading is the dealership when one resolves and
+  "Seller console" otherwise, because a page title should say what the page is, and a seller
+  whose account was never linked (D-080) is precisely who needs to be told that. Gate 12 is
+  green again.
+- **A lead first showed its car as `mock_autobazaar:AB-1001`.** Nobody can phone a buyer about
+  that. The payload now carries the listing headline, the *current* price (resolved on read,
+  never frozen onto the lead) and whether it is still available — with the raw reference kept
+  alongside, because it is what a dealer searches on.
+
+### Deferred, deliberately
+
+- **`[SCALE]` Email/SMS notification, conversion tracking, per-salesperson auth, lead
+  reassignment.** The live dashboard answers "the seller should know"; outbound delivery is
+  still the open question PLAN-01 §P17 flagged.
+- **`[SCALE]` Real dealer-staff provisioning.** The picker is the seam (D-080).
+- **`return_sessions` is always 1.** The signal, its weight and its normaliser are real and
+  tested, but nothing counts a buyer's prior sessions yet — that needs P4's `[SCALE]` episodic
+  memory to know one account's sessions are the same person across time. Written down rather
+  than silently scoring everyone as a first-timer without saying so.
+- **Lead state has four values; the console drives two.** `viewed` and `closed` exist on
+  `LeadState` and nothing sets them. `new → contacted` is the transition a dealer actually
+  makes in a demo; the other two need a CRM's worth of workflow around them.
+- **The analytics strip is seven days of counts.** PLAN-02's own cut order puts analytics
+  second on the list to drop; this is the small version that answers "is this getting better
+  or worse" without becoming a BI tool.
+
+---
+
+## Phase 14 — Cart ✅
+
+`plans/PLAN-02-MARKETPLACE.md`'s third phase. Run on 2026-08-09. Two halves, the split D-015
+established: 14.6/14.8/14.9/14.11 and the server side of 14.10 are pure Python (static scans
+and the real FastAPI app through `TestClient`); the rest drive a real Chromium against a
+backend `scripts/gate_phase14.py` starts itself on :8124 with the environment scrubbed to
+`DEMO_MODE=true` — which is also 14.12's own evidence. 14.8 **re-runs gate 8 in full** rather
+than reading it (CONSTITUTION III.1), including gate 8's own browser suite.
+
+```
+==============================================================================
+GATE 14 -- CART -- add to cart, payee disclosure, checkout on /cart
+==============================================================================
+  14.1   PASS     add-to-cart from a real CarCard click reaches the cart; the badge updates
+           14.1 add-to-cart from a real CarCard click reaches the cart and updates the badge
+  14.2   PASS     /cart mounts the same ui://checkout/payment resource -- read from the DOM
+           14.2 /cart mounts the same ui://checkout/payment resource
+  14.3   PASS     the chat rail is mounted and live on /cart, same session
+           14.3 the chat rail is mounted and live on /cart
+  14.4   PASS     payee legal name, address and phone above the fold and above the pay control
+           14.4 payee legal name, address and phone render above the fold and above the pay
+           control
+  14.5   PASS     an unverified payee is flagged explicitly; a verified one is not
+           14.5 an unverified payee renders the explicit unverified state; a verified one does
+           not
+  14.6   PASS     exactly one code path reaches confirm_booking, and it is the gesture-gated one
+           1 @tool registration (src/mcp/booking/tools.py:433); code references confined to
+           ['src/mcp/booking/resources.py', 'src/mcp/booking/tools.py']; the gesture token is
+           consumed at statement 2 of confirm_booking (ok, reason =
+           gesture_tokens.consume(args["gesture_token"], b...); ALLOWED_VIEW_TOOLS grants it to
+           ui://checkout/payment only; 0 code references across 23 files in web/src
+  14.7   PASS     no agent-driven path adds to cart or opens checkout -- zero, without a click
+           14.7 nothing reaches the cart or checkout without a real click
+  14.8   PASS     gates 8.3 / 8.6 / 8.10 / 8.11 still green -- in-chat checkout intact
+           scripts.gate_phase8 exits 0 -- 8.3 PASS, 8.6 PASS, 8.10 PASS, 8.11 PASS (re-run in
+           full, not read)
+  14.9   PASS     double-submit from /cart with one idempotency key: one booking, two responses
+           cart -> /cart/checkout -> ui://booking/form -> one booking
+           (84665efc-2337-406f-9bfb-ad448c01a096), two identical responses under key
+           'gate14-same-idempotency-key'
+  14.10  PASS     a withdrawn cart line reports unavailable and is refused at checkout
+           available flipped true -> false on withdrawal; POST /cart/checkout -> 409 'that
+           listing is no longer available'; rendering PASS
+  14.11  PASS     cart is account-scoped: account A's token never reads account B's
+           A=1 item, B reads 0; B's DELETE and checkout on A's item_id changed nothing;
+           anonymous=401; no cart route takes an account id (['/cart/checkout', '/cart/count',
+           '/cart/items', '/cart/items/{item_id}'])
+  14.12  PASS     DEMO_MODE walks add-to-cart -> /cart -> mock pay with the environment unset
+           14.12 DEMO_MODE walks add-to-cart -> /cart -> mock pay with the environment unset
+------------------------------------------------------------------------------
+  12 passed, 0 failed, 0 pending
+  GATE 14 GREEN
+==============================================================================
+```
+
+Without `web/node_modules` + Chromium the eight browser criteria report `PENDING` (the
+convention gate 6.2 established), and 14.8 reports `PENDING` too rather than claiming gate 8's
+browser criteria are green when they were never run.
+
+### What shipped
+
+| Area | Files |
+|---|---|
+| Cart domain | `src/domain/cart.py` — `CartItem` (with `natural_key`), `Cart` (immutable; `with_item` idempotent on `(source, source_id, offer_type)`) |
+| Stores | `src/adapters/cart_store.py` (`CartStore` protocol, `InMemoryCartStore`, `new_cart_item`), `src/adapters/db/cart_store.py` (`PostgresCartStore`) |
+| Schema | `migrations/versions/0005_cart.py` — `cart_items` with `UNIQUE (account_id, source, source_id, offer_type)`; `CartItemRow` in `src/adapters/db/models.py` |
+| Cart transport | `src/api/cart.py` — `GET|POST /cart/items`, `DELETE /cart/items/{id}`, `POST /cart/checkout`, `GET /cart/count`, all account-scoped from the cookie |
+| Payee disclosure | `src/mcp/booking/tools.py` (`_payee_fields`, resolved server-side from the *listing's* dealer), `src/mcp/booking/static/checkout.html` (`#payee` block above the pay control), `src/mcp/booking/server.py` (`dealers` parameter) |
+| Add-to-cart on the card | `src/mcp/ui/compiler.py` (`CardVisual.offer_type` → `offerType`), `src/mcp/ui/catalog.py`, `src/mcp/ui/tools.py`, `web/src/a2ui/catalog.tsx` (the button + `stopPropagation`) |
+| Cart frontend | `web/src/cart/{api.ts,CartContext.tsx,CartPanel.tsx,CartBadge.tsx}`, `web/src/App.tsx` (`mode="cart"`, the `add_to_cart` action handler, the header badge), `web/src/routes.tsx` (`/cart`, buyer-guarded), `web/src/main.tsx` (`CartProvider`), `web/src/styles.css` (+P14 block) |
+| Host attribution | `web/src/mcp-host/McpAppHost.tsx` — `data-resource-uri`, so gate 14.2 can read which App is mounted from the DOM rather than from config |
+| Proxy config | `web/nginx.conf` (`location /cart/`) and `web/vite.config.ts` (`"/cart/"`), added in the same change (D-057's trap, D-076's collision) |
+| Wiring | `src/api/main.py` — `build_cart_store`, `app.state.cart_store`, `app.state.cart_checkout_sessions`, the post-`submit_booking_draft` hand-off outside `DEMO_MODE` |
+| Gate | `scripts/gate_phase14.py`, `web/tests/cart.spec.ts`, `web/playwright.cart.config.ts` |
+| Tests | `tests/unit/test_domain_cart.py` (12), `tests/unit/test_adapters_cart_store.py` (9), `tests/integration/test_api_cart.py` (17), `tests/integration/test_adapters_cart_store_postgres.py` (8, run against live Postgres) |
+
+Three things surfaced while building this that were not in the plan:
+
+- **`/cart` collides with itself.** PLAN-02 §2.2 flagged that every new API prefix needs a
+  block in nginx *and* Vite; it did not notice that `/cart` is simultaneously the buyer's page
+  route and (as specified) an API route, and a proxy cannot tell a navigation from a `fetch()`
+  by path alone. Every cart route therefore lives one level down — the plan's `GET /cart`
+  became `GET /cart/items` — and a test asserts the bare route can never come back
+  (DECISIONS.md D-076).
+- **The scripted `DEMO_MODE` run opens the booking-form App by itself.** Gate 14.7's first
+  draft asserted "no MCP App mounted without a click", which is wrong: `open_booking_form` is
+  model-visible by design and beat 6 of the demo opens it. The criterion that actually matters
+  is narrower and now says so — the agent may never open *checkout*, and may never touch the
+  cart. The spec asserts the mounted resource is `ui://booking/form` and the cart count is
+  still 0. It also drove the session layout: three separate agent sessions, because a scripted
+  run and a cart-initiated checkout racing to mount an App over each other would fail in a way
+  that looks like a cart bug.
+- **Gate 14.6's own scan was too blunt to survive this repo's comments.** Its first run went
+  red on `web/src/cart/api.ts` — for a comment saying the module never goes near
+  `confirm_booking`. The Python half gets comment-exclusion free from `ast`; the `web/` half
+  now strips comments before scanning. A scan that cannot tell an explanation from a call
+  either fails on good documentation or teaches people to stop writing it, and the second
+  outcome is worse than no scan.
+
+### Deferred, deliberately
+
+- **`[SCALE]` Multi-item checkout.** A cart may hold several cars; checkout runs on one line,
+  because P8's booking lifecycle, quote path and gesture token are all single-listing and
+  widening them is a real change rather than a loop. The cart page says so on screen rather
+  than leaving the buyer to discover it, and `_payload` deliberately returns **no cart-wide
+  total** — a sum across a rental and a purchase is a number with no meaning.
+- **`[SCALE]` Cart persistence across devices, abandoned-cart recovery.**
+- **The A2UI canvas is not visible on `/cart`.** Surfaces the agent composes while the buyer
+  is on the cart page are processed but not drawn — the canvas slot holds the cart. The chat
+  rail still narrates them (D-078). Splitting the canvas is the `[SCALE]` fix.
+- **`condition` still does not influence ranking or TCO** — inherited from P13, still P16's
+  `[SCALE]` territory, and now visible on cart lines as well as result cards.
+- **A confirmed purchase does not empty the cart.** Not in P14's scope list, and not a
+  one-liner: the success only exists inside the sandboxed checkout iframe, so the host page
+  has no signal to react to without inventing a new one — and inventing a channel out of that
+  iframe is exactly the kind of thing P7's isolation was built to make hard. The buyer can
+  remove the line; wiring it to `confirm_booking`'s own result belongs with P15's lead events,
+  which need the same signal for the same reason.
+- **Gate 14.10's rendering half runs against an intercepted response.** A listing can only be
+  withdrawn *after* it was added (the API refuses to add an unavailable one) and no route
+  withdraws one, so the running backend cannot produce that state on demand. The server
+  behaviour — `available` flipping to `false`, checkout returning 409 — is asserted in Python
+  against the real app; the browser asserts the rendering of exactly that payload. Stated here
+  rather than left for someone to notice.
+
+---
+
+## Phase 13 — Dealer ✅
+
+`plans/PLAN-02-MARKETPLACE.md`'s second phase. Run on 2026-08-09; every criterion is pure
+Python against the generated catalogue except 13.5, which drives a real Chromium against
+`harness.html` (gate 6.2's own fixture harness, so the assertion is against real compiler
+output through the real `carCatalog`, not hand-written JSON).
+
+```
+==============================================================================
+GATE 13 -- DEALER -- directory, attribution, condition, payee identity
+==============================================================================
+  13.1   PASS     every listing resolves to exactly one Dealer -- zero orphans
+           240/240 listings resolve to 1 dealer each across 95 distinct dealers; 0 orphans,
+           0 dangling, 0 city/source mismatches
+  13.2   PASS     two seed runs of the dealer generator are byte-identical
+           sha256 0a35d1c62db1a967b90103959f865097... identical across two runs of 108
+           dealers; seed=7 differs (f8149ae27772531c...)
+  13.3   PASS     no generated dealer name matches the real-brand/dealer denylist
+           108 dealer names scanned against 34 real-world terms (every brand in the live
+           taxonomy + 10 known dealer groups), 0 hits; planted 'Toyota Motors Berlin'
+           correctly rejected
+  13.4   PASS     condition is a working filter: a new-only query returns zero used
+           spread {'certified_pre_owned': 33, 'new': 10, 'used': 197}; new-only returned 10
+           rows, all new; cpo-only returned 33, all certified_pre_owned
+  13.5   PASS     dealer name, city, rating and verification render on a real CarCard
+           web/tests/dealer-card.spec.ts rendered real compiler output through the real
+           carCatalog in Chromium -- stats={'expected': 3, 'unexpected': 0, 'flaky': 0,
+           'skipped': 0}
+  13.6   PASS     the directory covers every city on every marketplace
+           108 dealers = 2 sources x 18 cities x 3; verification spread {'pending': 23,
+           'unverified': 13, 'verified': 72}; 95 hold stock
+  13.7   PASS     PayeeIdentity for an unverified dealer reports it, never blank
+           unverified='Nordkap Carworks Rotterdam' -> flagged; pending='Hafenblick
+           Automobile Munich' -> flagged; verified='Ostkreuz Motors Berlin' -> not flagged;
+           payee(None) -> None
+  13.8   PASS     gate 1 still green -- catalogue counts and correlations unchanged
+           scripts.gate_phase1 exits 0 -- 10 passed, 0 failed, 0 pending
+------------------------------------------------------------------------------
+  8 passed, 0 failed, 0 pending
+  GATE 13 GREEN
+==============================================================================
+```
+
+### What shipped
+
+| Area | Files |
+|---|---|
+| Dealer domain | `src/domain/dealer.py` — `Dealer`, `VerificationStatus`, `PayeeIdentity` (+ `needs_flag`/`one_line`), `dealer_uuid` on its own namespace |
+| Condition | `src/domain/enums.py` — `VehicleCondition` (`new`/`used`/`certified_pre_owned`, `is_used`, `has_manufacturer_warranty`) |
+| Listing gains both | `src/domain/listing.py` — `dealer_id` (nullable) and `condition` (defaults `USED`) on `Listing` and `ListingSummary` |
+| Directory generator | `src/adapters/catalogue/dealers.py` — seeded synthetic directory, country-aware addresses/phones/legal forms, `real_world_denylist()` derived from the live brand pool, `assert_no_real_world_collisions` |
+| Catalogue wiring | `src/adapters/catalogue/generator.py` — `SOURCES`, `_pick_condition`, per-listing `aux` RNG, dealer assignment by city + marketplace |
+| Search filter | `src/domain/marketplace.py` (`SearchQuery.conditions`), `src/adapters/filtering.py`, `src/adapters/db/store.py` — Python predicate and SQL clause kept in lockstep |
+| Directory store | `src/adapters/dealer_store.py` (protocol, `InMemoryDealerDirectory.seeded()`, `resolve_payee`), `src/adapters/db/dealer_store.py` (`PostgresDealerDirectory`) |
+| Schema | `migrations/versions/0004_dealers.py`, `DealerRow` + two `ListingRow` columns, `dealer_to_row`/`to_dealer` in `mapping.py` |
+| Seeding | `scripts/seed_marketplace.py` — dealers upserted and flushed **before** listings, or the new FK rejects every row |
+| Card attribution | `src/mcp/ui/compiler.py` (`CardVisual` + five props), `src/mcp/ui/catalog.py`, `web/src/a2ui/catalog.tsx`, `src/mcp/ui/tools.py`, `src/mcp/ui/server.py` |
+| Wiring | `src/agent/orchestrator.py`, `src/agent/demo_stream.py`, `src/api/main.py` (`build_dealer_directory`, `app.state.dealers`) |
+| Gate | `scripts/gate_phase13.py`, `web/tests/dealer-card.spec.ts`, `web/playwright.dealer.config.ts`, `scripts/export_ui_fixtures.py` (real dealers in the golden fixture) |
+| Tests | `tests/unit/test_domain_dealer.py` (21), `tests/unit/test_adapters_dealers.py` (25) |
+
+Three things surfaced while building this that were not in the plan:
+
+- **The first version rewrote the whole catalogue.** Drawing `dealer_id` and `condition` from
+  the main generator RNG consumed two extra values per listing, which shifted every
+  subsequent draw — so adding a dealer changed which *cars* the generator produced, and
+  `test_every_car_the_demo_script_surfaces_has_its_own_model` went red because thirteen
+  models with no hand-built 3D asset had wandered into the demo's results. Fixed by seeding a
+  per-listing `random.Random(f"p13:{source}:{source_id}")`, which keeps both new fields
+  deterministic while leaving every pre-P13 field bit-identical. **A new field must not
+  retroactively change an old one** (DECISIONS.md D-072).
+- **The directory's first run put "Via Artigiani 64, Berlin" in it** — an Italian street in a
+  German city, from a single flat street pool. Two facts on one line contradicting each other
+  is exactly the tell that stops a buyer believing the dealer is real, which is the whole
+  value of dealer attribution. Streets are now keyed by country.
+- **Gate 13.5 failed on a wrong query parameter**, not on the feature: `harness.html` wants
+  `?fixture=results.json` (with the extension) and the spec asked for `?fixture=results`,
+  which 404s silently and renders nothing. The failure looked exactly like "the props never
+  reached the card" — worth remembering the next time a harness-driven criterion goes red.
+
+### Deferred, deliberately
+
+- **`[SCALE]` A real dealer-directory scraper.** Gated on a ToS/`robots.txt` check by whoever
+  owns it, weekly cadence, never against an OEM-branded page without sign-off (PLAN-01 §0
+  decision 1). The synthetic generator is **not** a placeholder for this — it is the permanent
+  demo and dev data source.
+- **`listings.dealer_id` stays nullable.** The assignment is decided by the generator, not by
+  anything SQL can recompute, so there is no honest in-migration backfill; `python -m
+  scripts.seed_marketplace` fills it (and the compose `command` already seeds on start).
+  Gate 13.1 asserts zero orphans in a freshly generated catalogue, which is the property that
+  actually matters.
+- **`condition` does not yet influence ranking or TCO.** `DECISIONS.md` D-003's depreciation
+  curve assumes new-car retention at year zero, which is now visibly an approximation for the
+  197 `used` rows. Written down rather than silently left — making the curve condition-aware
+  is P16's `[SCALE]` territory, not P13's.
+- **Dealer attribution is on the results card only.** The detail surface and the booking form
+  do not show it yet; the booking form is P14's job, where it becomes the payee disclosure.
+
+---
+
+## Phase 12 — Identity ✅
+
+The first phase of `plans/PLAN-02-MARKETPLACE.md` (the two-sided build). Run on 2026-08-09
+against live Postgres (`docker compose up -d postgres`, migration `0003_identity` applied) with
+`--require-stack`, so 12.5 is a hard PASS rather than PENDING. 12.2 drives a real Chromium
+against a scrubbed-environment backend on its own port (:8123), the same shape gates 7/8/11 use.
+
+```
+==============================================================================
+GATE 12 -- IDENTITY -- accounts, roles, dummy OTP, profile capture
+==============================================================================
+  12.1   PASS     each demo OTP code authenticates a seeded account; a fourth code is rejected
+           accepted ['123456', '234567', '345678']; rejected '999999' with 401
+  12.2   PASS     demo-auth banner above the fold on /login; full sign-in works in a browser
+           web/tests/auth.spec.ts passed against a real Chromium and a scrubbed-env backend
+           on :8123 -- stats={'expected': 6, 'unexpected': 0, 'flaky': 0, 'skipped': 0}
+  12.3   PASS     denylist scan: zero JWT libs, auth-provider SDKs or signing secrets
+           116 files scanned across ('src', 'scripts', 'pyproject.toml', 'web/package.json',
+           'web/package-lock.json') for 15 JWT/auth-provider/secret terms, 0 hits
+  12.4   PASS     a buyer token cannot read a seller route; 403 not an accidental 404
+           seller=200, buyer=403, anonymous=401 on GET /seller/profile
+  12.5   PASS     account + profile survive process restart, every field intact
+           account 509cc4c7..., profile and token all reloaded through a fresh store
+           instance; exact income EUR 88,000.00 intact, band derived as '50k_100k'
+  12.6   PASS     annual_income, income_band and phone are absent from every exported span
+           6 attributes exported, 5 redaction markers (['account.email', 'account.phone',
+           'profile.annual_income', 'profile.employer', 'profile.income_band']); raw
+           phone/income/employer absent, tool.name untouched
+  12.7   PASS     annual_income, income_band and employer reach zero model-facing payloads
+           53 files scanned (src/agent, src/mcp, prompts/) for ['annual_income',
+           'income_band', 'employer']; 0 references -- no prompt or tool result can carry them
+  12.8   PASS     income_band is derived; no route can set it independently
+           a body claiming '100k_plus' with no income resolved to 'undisclosed'; a body
+           claiming 'under_25k' with EUR 120000 resolved to '100k_plus' -- derived, never
+           accepted
+  12.9   PASS     DEMO_MODE=true completes a login with no signup and no ANTHROPIC_API_KEY
+           signed in and read /auth/me (role='buyer') with DEMO_MODE=true,
+           ANTHROPIC_API_KEY and CARDINAL_DATABASE_URL both unset
+  12.10  PASS     request-otp is honest about being a mock: banner + codes
+           banner='DEMO AUTH — ANY CODE BELOW WORKS, NOT REAL SECURITY',
+           demo_codes=['123456', '234567', '345678']
+  12.11  PENDING  [SCALE] OTP attempt rate limiting
+           rate limiting on OTP attempts not built -- [SCALE] (PLAN-02 P12); the demo codes
+           are public by design, so throttling guesses protects nothing yet
+------------------------------------------------------------------------------
+  10 passed, 0 failed, 1 pending
+  GATE 12 GREEN (with 1 pending)
+==============================================================================
+```
+
+Without a database up, 12.5 reports `PENDING` (same convention as 1.10/3.2/4.1); without
+`web/node_modules` + Chromium, 12.2 does (same convention as 6.2).
+
+#### Extended 2026-08-09 — Sign in with Google
+
+Added after the phase closed, so the gate was re-run rather than assumed. Re-run without a
+database (Docker was unavailable on this machine), so 12.5 drops to `PENDING` by the
+convention above — it was a hard PASS in the run pasted above and nothing in this change
+touches persistence. 12.2 drove a real Chromium and now covers **8** browser assertions — the
+new one asserts that a deployment with no Google credentials shows no Google button and can
+still sign in by email, which is the environment a judge on a clean machine actually gets.
+
+```
+  12.1   PASS     each demo OTP code authenticates a seeded account; a fourth code is rejected
+  12.2   PASS     demo-auth banner above the fold on /login; full sign-in works in a browser
+           stats={'expected': 8, 'unexpected': 0, 'flaky': 0, 'skipped': 0}
+  12.3   PASS     denylist scan: zero JWT libs, auth-provider SDKs or signing secrets
+  12.4   PASS     a buyer token cannot read a seller route; 403 not an accidental 404
+  12.5   PENDING  CARDINAL_DATABASE_URL unset -- no Postgres on this run
+  12.6   PASS     annual_income, income_band and phone absent from every exported span
+  12.7   PASS     annual_income, income_band and employer reach zero model-facing payloads
+  12.8   PASS     income_band is derived; no route can set it independently
+  12.9   PASS     DEMO_MODE=true completes a login with no signup and no ANTHROPIC_API_KEY
+  12.10  PASS     request-otp is honest about being a mock: banner + codes
+  12.11  PENDING  [SCALE] OTP attempt rate limiting
+------------------------------------------------------------------------------
+  9 passed, 0 failed, 2 pending
+  GATE 12 GREEN (with 2 pending)
+```
+
+18 new tests in `tests/integration/test_api_auth_google.py`; suite total **880 passed, 64
+skipped**. Google itself is never called — `exchange_code`/`fetch_identity` are stubbed, so
+what is asserted is Cardinal's half: the CSRF state check (four ways to fail it), that the
+role rides in the httpOnly cookie rather than the query string, and where each role lands.
+
+Three things worth carrying forward, all recorded in D-087:
+
+- **12.3 caught a docstring.** The denylist scans for auth-provider SDK names as plain
+  strings, so *naming* a vendor in a comment turns the gate red. Left blunt on purpose; the
+  comment now describes those vendors instead of naming them.
+- **A real 500 on the happy path**, found by the new tests rather than by a judge: the
+  callback passed `city=""` into `BuyerProfile`, which requires `min_length=1`. `city` and
+  `country` are now `str | None` — `None` means *not stated*, which is what a Google sign-in
+  actually knows, while `""` is still refused so the signup form cannot write a blank.
+- **A new `/login` state**: a Google seller has no dealership (Google carries none), so they
+  land on `/login?claim=dealership`. `LoginRoute`'s redirect has one exception for exactly
+  that combination — checked against the account, not just the URL.
+
+#### Fixed the same day — the test suite could hang instead of skipping
+
+`make test` with no Postgres reachable **hung indefinitely** rather than skipping.
+`pytest.mark.postgres` selects; it does not skip — the skip lives in the
+`database_url_or_skip` fixture, and `test_adapters_cart_store_postgres.py` and
+`test_adapters_lead_store_postgres.py` were marked but never requested it. They blocked
+inside the driver's connect, stopping the run with no indication of which test held it. Both
+now request it. The full suite went from **>600s and never finishing** to **7.8s**.
+
+### What shipped
+
+| Area | Files |
+|---|---|
+| Identity domain | `src/domain/identity.py` — `AccountRole`, `CustomerType`, `IncomeBand`, `band_for_income`, `Account`, `BuyerProfile` (with `income_band` as a `computed_field`), `SellerProfile`, `AuthToken`, `DEMO_OTP_CODES`, `DEMO_AUTH_BANNER`, `is_demo_otp` |
+| Stores | `src/adapters/identity_store.py` (`AccountStore` protocol, `InMemoryAccountStore`, `OtpChallenge`, `build_account`/`build_profile`, token minting), `src/adapters/db/identity_store.py` (`PostgresAccountStore`) |
+| Schema | `migrations/versions/0003_identity.py` — `accounts` (`UNIQUE (email, role)`), `account_profiles` (dual-storage `canonical`), `auth_tokens`, `otp_challenges`; four new rows in `src/adapters/db/models.py` |
+| Auth transport | `src/api/auth.py` — `POST /auth/request-otp`, `POST /auth/verify-otp`, `GET /auth/me`, `POST /auth/logout`, `GET /seller/profile`; `current_account`/`require_role` as the one authorisation path |
+| App wiring | `src/api/main.py` — `build_account_store`, `app.state.account_store`, `app.include_router(auth_router)` |
+| PII redaction | `src/agent/tracing.py` — `income`/`salary`/`employer` added to `_PII_KEY_RE`; key-shaped matches now redact non-string values too |
+| Frontend router | `web/src/main.tsx` (BrowserRouter + SessionProvider), `web/src/routes.tsx`, `web/src/auth/{api.ts,SessionContext.tsx,LoginPage.tsx}`, `web/src/styles.css` (+P12 block), `react-router-dom@7` |
+| Proxy config | `web/vite.config.ts` and `web/nginx.conf` — `/auth/` prefix + `= /seller/profile` exact match, added in the same change (D-057's trap) |
+| Gate | `scripts/gate_phase12.py`, `web/tests/auth.spec.ts`, `web/playwright.auth.config.ts` |
+| Tests | `tests/unit/test_domain_identity.py` (39), `tests/unit/test_adapters_identity_store.py` (28), `tests/integration/test_api_auth.py` (18), `tests/integration/test_adapters_identity_store_postgres.py` (9) |
+| Google sign-in *(added 2026-08-09)* | `src/adapters/oauth/google.py` — authorization-code flow, `GoogleIdentity`, `is_configured`/`new_state`/`authorization_url`/`exchange_code`/`fetch_identity`. No JWT library: the access token goes to Google's `userinfo` endpoint rather than verifying the `id_token` locally, which is what keeps gate 12.3 green |
+| …routes | `GET /auth/providers`, `GET /auth/google/start`, `GET /auth/google/callback`, `POST /auth/claim-dealership` in `src/api/auth.py`; `sign_in_external`/`claim_dealership`/`get_seller_profile` on both `AccountStore` implementations |
+| …web | `fetchProviders`/`startGoogle`/`claimDealership`/`needsDealership` in `web/src/auth/api.ts`; "Continue with Google" + the dealership claim screen in `web/src/auth/LoginPage.tsx`; the one `LoginRoute` exception in `web/src/routes.tsx`; `.google-button`/`.auth-divider` in `web/src/styles.css` |
+| …tests | `tests/integration/test_api_auth_google.py` (18) |
+
+`income_band` is a pydantic `computed_field`, not a stored column or a settable field — there is
+no setter and no `model_validate` input for it, so gate 12.8 holds by construction rather than by
+a check someone has to remember to write. A request body claiming a band it hasn't earned is
+dropped at the model boundary, at `build_profile`, and again on reload from `canonical`.
+
+Two things surfaced while building this that were not in the plan:
+
+- **SQLAlchemy emitted the `account_profiles` INSERT before `accounts`.** The two tables are
+  joined by a plain `ForeignKey` with no `relationship()` between the mappers, so the unit of
+  work had no dependency edge to sort by and the FK rejected it. Caught by the Postgres
+  integration suite on its first run (8 of 9 tests red), fixed with an explicit
+  `await session.flush()` between the two adds rather than by declaring a relationship purely
+  to fix ordering.
+- **`/` must not be auth-guarded.** The first draft of `web/src/routes.tsx` wrapped the buyer
+  chat in `RequireRole`. That would have turned gates 6.2, 7.x and 11.3 red — all three drive
+  the real product at `/` with no session — and it would have demanded a signup before the agent
+  says a word. Identity is required at *checkout* (P14), which is where it means something.
+  The decision is recorded in `routes.tsx`'s own docstring and asserted by `auth.spec.ts`.
+
+### Deferred, deliberately
+
+- **`[SCALE]` OTP attempt rate limiting** — gate 12.11. The demo codes are public by design, so
+  throttling guesses protects nothing until real OTP delivery exists to protect.
+- **`[SCALE]` Real OTP delivery, passwords/passkeys, real sessions.** The `AccountStore`
+  protocol is the seam; `verify_otp` is the one method a real verifier replaces.
+- **`[SCALE]` Multi-tenancy.** Still gate 10.6's problem; no `tenant_id` anywhere.
+- **Buyer-header session display and a sign-out control on `/`.** `SessionProvider` is mounted
+  above the router and `App` can read it, but the chat rail does not surface the account yet —
+  P14 adds the header alongside the cart icon, which is where it belongs visually.
 
 ---
 
@@ -970,6 +1716,17 @@ earlier — no `-v`, the named Postgres volume was reused, not destroyed). 11.3/
 disposable backend on its own port with the environment scrubbed to just `DEMO_MODE=true`,
 driving the real product (`index.html`, not a harness page) through a real Chromium instance.
 11.7/11.9/11.10 are pure filesystem/subprocess checks.
+
+> **Run this one on a clean machine state.** Found while verifying P14 (2026-08-09): 11.10
+> re-runs gates 0–11, and a Vite preview server left listening on `:4173` by an *earlier*
+> gate's Playwright run gets reused (`reuseExistingServer: !CI`) with whatever
+> `CARDINAL_API_PORT` it was started with. Gate 7 then talks to the wrong backend — with a
+> `docker compose` stack on `:8000` it silently answers, so the run produces an empty report
+> and all ten of gate 7's criteria fail as "no test titled '7.N ...' found". Gate 7 standalone
+> was green in the same session, before and after, and gate 11 re-ran fully green
+> (8 PASS / 3 PENDING, 11.10 included) once the stray process was killed. Check `:4173` is
+> free before running gate 11; it is the same family of mistake D-033 already records for
+> `:8000`.
 
 ```
 ==============================================================================

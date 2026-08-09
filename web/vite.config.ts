@@ -37,17 +37,45 @@ const PROXY = {
   },
   "/mcp-apps": API_TARGET,
   "/demo": API_TARGET,
+  // PLAN-02 P12. Both of these must also exist in `web/nginx.conf` or the container silently
+  // serves `index.html` with a 200 for them and the login fetch parses HTML as JSON (D-057).
+  "/auth": API_TARGET,
+  // PLAN-02 P12/P15. Trailing slash, load-bearing: `"/seller"` would also swallow the *page*
+  // navigation to `/seller` and hand the seller a JSON 409 instead of their console. Every
+  // seller API route lives at `/seller/...` for exactly that reason (D-076).
+  "/seller/": API_TARGET,
+  // PLAN-02 P14. The trailing slash is load-bearing, not tidiness: Vite matches string proxy
+  // keys with `startsWith`, so `"/cart"` would also swallow the *page* navigation to `/cart`
+  // and hand the buyer a JSON 401 instead of the cart page. Every cart API route lives at
+  // `/cart/...` for exactly this reason (D-076, `src/api/cart.py`'s docstring).
+  "/cart/": API_TARGET,
+  // PLAN-02 P16. Must exist here *and* in web/nginx.conf -- gate 16.13 derives the required
+  // set from FastAPI's own route table and fails if either file is missing one.
+  "/voice/": API_TARGET,
 };
 const ALLOWED_HOSTS = ["localhost", "127.0.0.1"];
+
+// `sandboxOrigin()` (web/src/mcp-host/sandboxOrigin.ts) swaps `localhost` <-> `127.0.0.1` to
+// get two distinct origins for the sandboxed MCP App iframe, on the assumption both names
+// reach this same server. That's only true if this server actually listens on the IPv4
+// loopback address -- Node's default bind for hostname `"localhost"` resolves via the OS
+// resolver and, on a machine where that resolves to `::1` first (a real Windows default, not
+// a misconfiguration), binds IPv6-only. `127.0.0.1` then connects to nothing, the sandboxed
+// iframe fails to load, and the booking form/checkout renders blank. Binding explicitly here
+// sidesteps the resolution order entirely: browsers fall back to whichever of `::1`/`127.0.0.1`
+// actually accepts a connection (Happy Eyeballs, RFC 8305), so both hostnames keep working.
+const DEV_HOST = "127.0.0.1";
 
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: DEV_HOST,
     port: 5173,
     allowedHosts: ALLOWED_HOSTS,
     proxy: PROXY,
   },
   preview: {
+    host: DEV_HOST,
     port: 4173,
     strictPort: true,
     allowedHosts: ALLOWED_HOSTS,

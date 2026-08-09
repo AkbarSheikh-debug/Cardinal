@@ -8,6 +8,7 @@
  * The first test is the shipping configuration; the second only runs when the flag is set.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { signInAsBuyer } from "./helpers/signin";
 
 const SHOTS = "../shots";
 
@@ -31,7 +32,8 @@ test("no model is named in the UI, and the interview runs on the default", async
   });
   page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message}`));
 
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle" });
+  await signInAsBuyer(page);
+  await page.waitForLoadState("networkidle");
 
   const input = page.getByTestId("chat-input");
   await expect(input).toBeEnabled({ timeout: 10_000 });
@@ -69,7 +71,8 @@ test("no model is named in the UI, and the interview runs on the default", async
 test("picker selects Groq and runs the interview on it when enabled", async ({ page }) => {
   test.skip(!(await pickerEnabled(page)), "picker is hidden by default (D-059)");
 
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle" });
+  await signInAsBuyer(page);
+  await page.waitForLoadState("networkidle");
   await expect(page.getByTestId("model-picker")).toBeVisible({ timeout: 10_000 });
 
   const groqOption = page.getByTestId("model-option-groq/llama-3.3-70b-versatile");

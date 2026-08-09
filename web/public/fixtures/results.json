@@ -23,19 +23,41 @@
           "id": "card-0",
           "component": "CarCard",
           "source": "mock_autobazaar",
-          "sourceId": "AB-1073",
+          "sourceId": "AB-1002",
           "rank": 1,
           "score": 0.87,
-          "rationale": "Holds 80% of its value over the pricing horizon."
+          "rationale": "Holds 80% of its value over the pricing horizon.",
+          "headline": "2026 Polestar 3 S line \u00b7 1,000 km \u00b7 electric \u00b7 single speed",
+          "modelSrc": "/models/silhouettes/luxury.glb",
+          "posterSrc": "/models/silhouettes/luxury.png",
+          "representative": true,
+          "photoSrc": "/photos/polestar-3.jpg",
+          "dealerName": "Vieuxpont Auto Centrum Copenhagen",
+          "dealerCity": "Copenhagen",
+          "dealerRating": 4.2,
+          "dealerVerified": true,
+          "condition": "new",
+          "offerType": "buy"
         },
         {
           "id": "card-1",
           "component": "CarCard",
           "source": "mock_drivenow",
-          "sourceId": "DN-0421",
+          "sourceId": "DN-1001",
           "rank": 2,
           "score": 0.79,
-          "rationale": "Priced within the stated budget with low mileage."
+          "rationale": "Priced within the stated budget with low mileage.",
+          "headline": "2022 Hyundai Veloster Elegance \u00b7 62,800 km \u00b7 petrol \u00b7 automatic",
+          "modelSrc": "/models/silhouettes/coupe.glb",
+          "posterSrc": "/models/silhouettes/coupe.png",
+          "representative": true,
+          "photoSrc": "/photos/hyundai-veloster.jpg",
+          "dealerName": "Hafenblick Fahrzeuge Lisbon",
+          "dealerCity": "Lisbon",
+          "dealerRating": 3.8,
+          "dealerVerified": false,
+          "condition": "used",
+          "offerType": "rent"
         }
       ]
     }

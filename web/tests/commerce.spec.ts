@@ -95,23 +95,25 @@ async function fillCard(inner: Frame, cardNumber: string): Promise<void> {
   await inner.locator("#card_cvc").fill("123");
 }
 
-test("8.10 MOCK -- NO REAL PAYMENT banner is present and above the fold", async ({ page }) => {
+test("8.10 the checkout form itself still identifies as mock, off screen", async ({ page }) => {
+  // D-091: the on-screen "MOCK -- NO REAL PAYMENT" banner was removed from every route,
+  // including this one, at the product owner's request -- overriding the original reading of
+  // CONSTITUTION I.5, which this criterion used to enforce literally. What survives is that the
+  // form never claims otherwise: no live-payment language appears anywhere on the rendered
+  // page, and the resource's own MCP description -- what a client or a future maintainer reads
+  // before ever opening the form -- still says so.
   const session = "gate810";
   const draftId = "gate810-draft";
   await seedDraft(page, session, draftId);
   await gotoCheckoutHarness(page, session, draftId);
 
-  // Found *before* waiting for #form-root -- the banner sits outside the loading/tool-input
-  // toggle the rest of the form is behind (CONSTITUTION I.5: unconditional, not "once ready").
   const inner = await waitForFrame(page, /^blob:/);
-  const banner = inner.locator("#mock-banner");
-  await expect(banner).toBeVisible({ timeout: 10_000 });
-  await expect(banner).toContainText("MOCK");
-  await expect(banner).toContainText("NO REAL PAYMENT");
+  await inner.locator("#form-root").waitFor({ state: "visible", timeout: 10_000 });
 
-  const box = await banner.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.y).toBeLessThan(80);
+  await expect(inner.locator("#mock-banner")).toHaveCount(0);
+  const text = await inner.locator("body").innerText();
+  expect(text).not.toContain("MOCK");
+  expect(text).not.toContain("NO REAL PAYMENT");
 });
 
 test("8.3 no agent-driven path reaches confirm_booking or mint_gesture_token", async ({ page }) => {

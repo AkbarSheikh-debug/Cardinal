@@ -18,6 +18,10 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, NamedTuple
 
+from src.adapters.catalogue.dealers import (
+    dealers_by_source_and_city,
+    generate_dealers,
+)
 from src.adapters.catalogue.taxonomy import (
     ALWAYS_ELECTRIC_BRANDS,
     CATEGORY_SHAPES,
@@ -30,6 +34,7 @@ from src.adapters.catalogue.taxonomy import (
     brands_in_category,
 )
 from src.domain.dates import DateRange
+from src.domain.dealer import Dealer
 from src.domain.enums import (
     BrandTier,
     Currency,
@@ -40,6 +45,7 @@ from src.domain.enums import (
     TimingMechanism,
     Transmission,
     VehicleCategory,
+    VehicleCondition,
 )
 from src.domain.listing import Efficiency, Listing, Location, RentalRates, listing_uuid
 from src.domain.money import Money
@@ -65,6 +71,10 @@ MIN_BRANDS_PER_CATEGORY = 10
 
 SOURCE_DEALER = "mock_autobazaar"
 SOURCE_RENTAL = "mock_drivenow"
+
+#: Both marketplaces, in a fixed order -- what the dealer directory is generated for
+#: (PLAN-02 P13). A tuple, not a `set`, because gate 13.2 compares two runs byte for byte.
+SOURCES: tuple[str, ...] = (SOURCE_DEALER, SOURCE_RENTAL)
 
 #: A rental marketplace that also sells ex-fleet cars is a real business model, and it puts
 #: every `both` listing on the adapter whose `availability` actually means something.
@@ -359,6 +369,47 @@ def _pick_efficiency(
     return Efficiency(value=value, unit=unit)
 
 
+#: Delivery mileage. Above this a zero-age car is a demonstrator or a pre-registration, which
+#: is `USED` in every way a buyer cares about even though the plate is this year's.
+NEW_CAR_MAX_KM = 1_500
+
+#: Manufacturer certified-pre-owned programmes have an age and a mileage ceiling. These are
+#: the illustrative ones this catalogue uses; like everything in `src/domain/constants.py`
+#: they are representative rather than sourced from any specific programme.
+CPO_MAX_AGE_YEARS = 5
+CPO_MAX_KM = 80_000
+
+#: How often an eligible car is actually certified, by tier. Premium and luxury brands run
+#: the biggest CPO programmes -- that is what the warranty is worth defending on a used sale.
+_CPO_RATE: dict[BrandTier, float] = {
+    BrandTier.BUDGET: 0.10,
+    BrandTier.MAINSTREAM: 0.22,
+    BrandTier.PREMIUM: 0.42,
+    BrandTier.LUXURY: 0.50,
+}
+
+
+def _pick_condition(
+    year: int, mileage_km: int, tier: BrandTier, offer_type: OfferType, rng: random.Random
+) -> VehicleCondition:
+    """Derived from age, mileage and tier -- never drawn independently.
+
+    Same discipline as every other field here (PHASE-1 §4.1): a randomly-assigned `condition`
+    would produce a 2019 car with 140,000 km labelled `NEW`, and one screenshot of that makes
+    the whole catalogue look fabricated.
+
+    A rental car is never `NEW`: it is in a rental fleet, which means it has been driven by
+    someone other than the buyer, whatever its odometer says.
+    """
+    age = REFERENCE_YEAR - year
+    if age <= 0 and mileage_km <= NEW_CAR_MAX_KM and not offer_type.is_rentable:
+        return VehicleCondition.NEW
+    eligible = 1 <= age <= CPO_MAX_AGE_YEARS and mileage_km <= CPO_MAX_KM
+    if eligible and rng.random() < _CPO_RATE[tier]:
+        return VehicleCondition.CERTIFIED_PRE_OWNED
+    return VehicleCondition.USED
+
+
 def _pick_year_and_mileage(category: VehicleCategory, rng: random.Random) -> tuple[int, int]:
     # Weighted toward recent stock -- a forecourt is not a uniform sample of the last decade.
     years = list(range(REFERENCE_YEAR - 9, REFERENCE_YEAR + 1))
@@ -588,6 +639,12 @@ def generate_catalogue(seed: int = DEFAULT_SEED, total: int = DEFAULT_TOTAL) -> 
             pool = tuple(s for s in pool if s.brand == required_brand)
         drafts.append(_Draft(category, rng.choice(pool), offer_type))
 
+    # PLAN-02 P13: the dealer directory is generated from its own `random.Random(seed)`
+    # inside `generate_dealers`, so adding it here does not perturb the listing stream this
+    # `rng` produces -- gate 1.8's price correlations and gate 1.3's brand spread are
+    # unchanged by dealers existing.
+    dealer_index = dealers_by_source_and_city(generate_dealers(seed, SOURCES))
+
     # Number source ids per source, in plan order, so they are stable across runs.
     counters = {SOURCE_DEALER: 1000, SOURCE_RENTAL: 1000}
     listings: list[Listing] = []
@@ -596,7 +653,15 @@ def generate_catalogue(seed: int = DEFAULT_SEED, total: int = DEFAULT_TOTAL) -> 
         counters[source] += 1
         source_id = f"{SOURCE_ID_PREFIX[source]}-{counters[source]}"
         listings.append(
-            _build_listing(source, source_id, draft.category, draft.spec, draft.offer_type, rng)
+            _build_listing(
+                source,
+                source_id,
+                draft.category,
+                draft.spec,
+                draft.offer_type,
+                rng,
+                dealer_index,
+            )
         )
 
     return tuple(listings)
@@ -609,6 +674,7 @@ def _build_listing(
     spec: ModelSpec,
     offer_type: OfferType,
     rng: random.Random,
+    dealer_index: dict[tuple[str, str], tuple[Dealer, ...]],
 ) -> Listing:
     tier = brand_tier(spec.brand)
     shape = CATEGORY_SHAPES[category]
@@ -634,17 +700,38 @@ def _build_listing(
     blocked = _blocked_windows(available_from, rng) if offer_type.is_rentable else ()
     variant = rng.choice(TRIMS_BY_TIER[tier])
 
+    # PLAN-02 P13's two new fields draw from their **own** per-listing stream, not from
+    # `rng`. Drawing from `rng` was the first version and it silently rewrote the catalogue:
+    # two extra draws per listing shifted every subsequent one, so adding a `dealer_id`
+    # changed which *cars* the generator produced, and
+    # `test_every_car_the_demo_script_surfaces_has_its_own_model` went red because thirteen
+    # models with no hand-built 3D asset had wandered into the demo's results.
+    #
+    # Seeding on the natural key keeps this deterministic (gates 1.6/13.2 still compare two
+    # runs byte for byte) while leaving every pre-P13 field bit-identical -- which is what
+    # makes gate 1.8's price correlations and gate 5.4's golden set still mean what they
+    # meant before this phase. A new field must not retroactively change an old one.
+    aux = random.Random(f"p13:{source}:{source_id}")
+
+    # A dealer in the car's own city, on the car's own marketplace. A buyer told the car is
+    # in Lyon and the dealer is in Warsaw has been given two facts that contradict each
+    # other, and the second is the one they would act on.
+    dealer = aux.choice(dealer_index[(source, city.name)])
+    condition = _pick_condition(year, mileage_km, tier, offer_type, aux)
+
     return Listing(
         id=listing_uuid(source, source_id),
         source=source,
         source_id=source_id,
         fetched_at=CATALOGUE_EPOCH,
         raw=_raw_payload(spec, source, source_id, year, mileage_km, market_value, blocked),
+        dealer_id=dealer.id,
         brand=spec.brand,
         model=spec.model,
         variant=variant,
         year=year,
         category=category,
+        condition=condition,
         offer_type=offer_type,
         market_value=market_value,
         price_buy=price_buy,

@@ -105,11 +105,28 @@ _CUSTOM: tuple[ComponentSpec, ...] = (
         # `modelSrc`/`posterSrc`/`representative` are D-060's per-listing 3D. Optional, not
         # required: a card with no resolvable asset still renders as text, and the validator
         # would otherwise reject a perfectly good results surface for a missing picture.
+        # `dealer*`/`condition` are PLAN-02 P13's attribution (proposal doc #4/#2). Optional
+        # for the same reason the 3D props are: a listing whose `dealer_id` predates the P13
+        # re-seed must still render, not fail validation for a missing name.
         optional=(
             "headline",
             "modelSrc",
             "posterSrc",
             "representative",
+            # A real reference photo (D-060 follow-up), when this pair was sourced from a
+            # photo library. Takes over the card's poster slot client-side; optional for the
+            # same reason modelSrc/posterSrc are -- most pairs still resolve to a silhouette
+            # or GLB poster only.
+            "photoSrc",
+            "dealerName",
+            "dealerCity",
+            "dealerRating",
+            "dealerVerified",
+            "condition",
+            # PLAN-02 P14: what an "Add to cart" click on this card would mean (`buy`/`rent`/
+            # `both`). Optional like the rest -- a card compiled without it renders with no
+            # add control rather than with one that guesses.
+            "offerType",
             "onExplain",
             "onSelect",
         ),

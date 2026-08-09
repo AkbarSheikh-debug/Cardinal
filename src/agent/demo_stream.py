@@ -31,6 +31,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from src.adapters.dealer_store import InMemoryDealerDirectory
 from src.adapters.store import ListingStore
 from src.agent.extraction import DemoSlotExtractor
 from src.agent.interview import process_turn
@@ -246,6 +247,10 @@ async def run_streamed_demo(
                 sink=sink,
                 registry=registry,
                 store=store,
+                # PLAN-02 P13: the same generated directory the seeded catalogue's
+                # `dealer_id`s point at, so `DEMO_MODE`'s cards carry real attribution
+                # rather than silently dropping it (gate 13.5 renders these).
+                dealers=InMemoryDealerDirectory.seeded(),
                 phase=lambda: state.phase.value,
             ),
             "model",
@@ -254,7 +259,13 @@ async def run_streamed_demo(
     booking_tools = {
         t.name: t.handler
         for t in for_audience(
-            build_booking_tool_specs(session_id=session_id, sink=sink, store=store), "app"
+            build_booking_tool_specs(
+                session_id=session_id,
+                sink=sink,
+                store=store,
+                dealers=InMemoryDealerDirectory.seeded(),
+            ),
+            "app",
         )
     }
 
@@ -432,7 +443,13 @@ async def on_draft_submitted(
     booking_tools = {
         t.name: t.handler
         for t in for_audience(
-            build_booking_tool_specs(session_id=session_id, sink=sink, store=store), "app"
+            build_booking_tool_specs(
+                session_id=session_id,
+                sink=sink,
+                store=store,
+                dealers=InMemoryDealerDirectory.seeded(),
+            ),
+            "app",
         )
     }
     ctx = _contexts.get(session_id)

@@ -576,7 +576,11 @@ def build_gate() -> Gate:
         )
 
     # -- 8.10 [MVP] (browser) ----------------------------------------------------------------
-    browser_criterion("8.10", "MOCK -- NO REAL PAYMENT banner is present and above the fold")
+    # Was "MOCK -- NO REAL PAYMENT banner is present and above the fold" -- the on-screen
+    # banner was removed from the checkout form (D-091), overriding the original reading of
+    # CONSTITUTION I.5. The spec now asserts the removal was deliberate and complete rather
+    # than reading a banner that no longer exists.
+    browser_criterion("8.10", "checkout form carries no on-screen mock-payment banner")
 
     # -- 8.11 [MVP] (browser) ----------------------------------------------------------------
     browser_criterion(

@@ -33,6 +33,32 @@ class VehicleCategory(StrEnum):
     SPORTS = "sports"
 
 
+class VehicleCondition(StrEnum):
+    """New, used, or manufacturer-certified (PLAN-02 P13, proposal doc #2).
+
+    Orthogonal to `OfferType`: "am I buying or renting" and "is this car new or used" are
+    different questions, and a dealer selling new stock versus a lease return are different
+    trust levels, financing paths, and warranty positions.
+
+    `CERTIFIED_PRE_OWNED` is deliberately its own value rather than a flag on `USED`. It is
+    the one a buyer actually shops for -- it carries a manufacturer-backed warranty that a
+    private used sale does not -- and folding it into `USED` would make that undiscoverable.
+    """
+
+    NEW = "new"
+    USED = "used"
+    CERTIFIED_PRE_OWNED = "certified_pre_owned"
+
+    @property
+    def is_used(self) -> bool:
+        """CPO counts as used: it has had an owner, whatever warranty rides along."""
+        return self is not VehicleCondition.NEW
+
+    @property
+    def has_manufacturer_warranty(self) -> bool:
+        return self in (VehicleCondition.NEW, VehicleCondition.CERTIFIED_PRE_OWNED)
+
+
 class OfferType(StrEnum):
     BUY = "buy"
     RENT = "rent"

@@ -64,6 +64,26 @@ class CardVisual:
     #: True when `model_src` is a body-style silhouette rather than a model of this actual
     #: car, so the card can say which of the two it is showing.
     representative: bool
+    #: A real reference photo (`vehicle_models.vehicle_photo_src`), when this pair has one.
+    #: Takes over the poster slot on the card -- a real photo of the actual model beats a
+    #: generated silhouette or GLB poster every time one is available.
+    photo_src: str | None = None
+
+    #: PLAN-02 P13 / proposal doc #4: who is selling this car, and whether they have been
+    #: checked. All optional -- a listing whose `dealer_id` predates the P13 re-seed still
+    #: compiles to a valid card, it just doesn't carry attribution.
+    dealer_name: str | None = None
+    dealer_city: str | None = None
+    dealer_rating: float | None = None
+    dealer_verified: bool | None = None
+    #: `new` / `used` / `certified_pre_owned` (proposal doc #2).
+    condition: str | None = None
+
+    #: PLAN-02 P14: what "add to cart" would mean for this listing -- `buy`, `rent` or `both`.
+    #: The card needs it because a cart item's intent is part of its identity (`CartItem`'s
+    #: natural key), and a card that guessed `buy` for a rental-only listing would produce an
+    #: add that `POST /cart/items` rejects with a 409 after the click.
+    offer_type: str | None = None
 
 
 # -- render_progress ----------------------------------------------------------------------------
@@ -119,6 +139,23 @@ def compile_results_surface(
             props["modelSrc"] = visual.model_src
             props["posterSrc"] = visual.poster_src
             props["representative"] = visual.representative
+            if visual.photo_src is not None:
+                props["photoSrc"] = visual.photo_src
+            # Set individually rather than as a nested object: the catalog validator checks
+            # prop *names* against the registered spec (CONSTITUTION II.4), and a nested
+            # blob would pass validation while carrying anything at all inside it.
+            if visual.dealer_name is not None:
+                props["dealerName"] = visual.dealer_name
+            if visual.dealer_city is not None:
+                props["dealerCity"] = visual.dealer_city
+            if visual.dealer_rating is not None:
+                props["dealerRating"] = visual.dealer_rating
+            if visual.dealer_verified is not None:
+                props["dealerVerified"] = visual.dealer_verified
+            if visual.condition is not None:
+                props["condition"] = visual.condition
+            if visual.offer_type is not None:
+                props["offerType"] = visual.offer_type
         cards.append(component(card_ids[i], "CarCard", props))
     root = component(ROOT_ID, "Column", {"children": card_ids})
     return CompiledSurface(kind=SurfaceKind.RESULTS, components=[root, *cards])

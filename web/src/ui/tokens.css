@@ -1,0 +1,252 @@
+/**
+ * The design token layer.
+ *
+ * Three sources, one vocabulary:
+ *
+ * - **Structure** — the radius, spacing and type ladders — comes from Cohere's system
+ *   (`VoltAgent/awesome-design-md` → `design-md/cohere/DESIGN.md`) and is unchanged.
+ * - **Names** come from shadcn/ui's semantic token set (`--background`, `--foreground`,
+ *   `--card`, `--primary`, `--muted`, `--border`, `--ring`, `--radius`, …). Adopting the names
+ *   rather than the framework buys the component anatomy without pulling Tailwind into a repo
+ *   whose 1,700 lines of CSS are already variable-driven and working.
+ * - **Colour** now comes from the **Paddock Green** handoff: a dark, photographic treatment
+ *   built around a near-black green ground, a mint accent, and near-white mint for primary
+ *   controls. It replaces the white Cohere canvas the first pass shipped.
+ *
+ * The legacy block at the bottom is what makes a whole-product re-theme cheap. Every
+ * pre-existing surface in `styles.css` reads `--bg` / `--text` / `--line` / `--accent`;
+ * re-pointing those six is what turned the product from white to paddock green without
+ * touching layout — the same trick that turned it white in the first place.
+ *
+ * **Contrast rule, load-bearing.** Secondary copy on the dark surfaces is white at 45–80%
+ * opacity (`--pg-ink-muted` / `--pg-ink-faint`), never a flat mid-grey. A fixed grey against
+ * this ground reads as muddy at every size; the handoff calls this out as the fix a prior
+ * contrast pass landed on, and it is repeated here because it is the rule most likely to be
+ * broken by someone adding one more shade of grey.
+ *
+ * Dark only, on purpose — the same reasoning as before, inverted. The design commits to one
+ * visual world, and a light branch would be a page this system does not describe.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Paddock Green (raw) --------------------------------------------------------------
+     Exact values from the handoff. Named as it names them so the mapping below can be checked
+     against the source without a decoder ring. */
+  --pg-bg: #0a1512;
+  --pg-chrome: #08120f;
+  --pg-mint: #7fd6bd;
+  --pg-mint-soft: rgb(127 214 189 / 0.14);
+  --pg-primary-fill: #eafff6;
+  --pg-primary-ink: #0a2a24;
+  --pg-border: rgb(255 255 255 / 0.12);
+  --pg-border-strong: rgb(255 255 255 / 0.28);
+  --pg-ink-muted: rgb(255 255 255 / 0.6);
+  --pg-ink-faint: rgb(255 255 255 / 0.45);
+  /* The brand square in the header. */
+  --pg-brand: #0f3b32;
+
+  /* ---- Cohere palette (raw) ------------------------------------------------------------
+     Named exactly as DESIGN.md names them, so the mapping below can be checked against the
+     source without a decoder ring. */
+  --cohere-black: #000000;
+  --cohere-primary: #17171c;
+  --cohere-ink: #212121;
+  --cohere-deep-green: #003c33;
+  --cohere-dark-navy: #071829;
+  --cohere-canvas: #ffffff;
+  --cohere-soft-stone: #eeece7;
+  --cohere-pale-green: #edfce9;
+  --cohere-pale-blue: #f1f5ff;
+  --cohere-hairline: #d9d9dd;
+  --cohere-border-light: #e5e7eb;
+  --cohere-card-border: #f2f2f2;
+  --cohere-muted: #93939f;
+  --cohere-slate: #75758a;
+  --cohere-body-muted: #616161;
+  --cohere-action-blue: #1863dc;
+  --cohere-focus-blue: #4c6ee6;
+  --cohere-form-focus: #9b60aa;
+  --cohere-coral: #ff7759;
+  --cohere-coral-soft: #ffad9b;
+  --cohere-error: #b30000;
+
+  /* ---- shadcn semantic tokens -----------------------------------------------------------
+     Same names, paddock-green values. Everything downstream reads these. */
+  --background: var(--pg-bg);
+  --foreground: #ffffff;
+
+  --card: var(--pg-chrome);
+  --card-foreground: #ffffff;
+  --popover: var(--pg-chrome);
+  --popover-foreground: #ffffff;
+
+  /* The primary control is the near-white mint pill; its ink is the dark green that sits on
+     top of it. This is the inverse of the Cohere pass, where primary was near-black. */
+  --primary: var(--pg-primary-fill);
+  --primary-foreground: var(--pg-primary-ink);
+
+  --secondary: rgb(255 255 255 / 0.1);
+  --secondary-foreground: #ffffff;
+
+  --muted: rgb(255 255 255 / 0.07);
+  --muted-foreground: var(--pg-ink-muted);
+
+  --accent: var(--pg-mint);
+  --accent-foreground: var(--pg-primary-ink);
+
+  /* One warm colour in the system, reused for every warning/overdue/withdrawn/unverified
+     state. A second red is how a palette starts to drift. */
+  --destructive: var(--cohere-coral);
+  --destructive-foreground: var(--pg-primary-ink);
+
+  --border: var(--pg-border);
+  --input: var(--pg-border-strong);
+  --ring: var(--pg-mint);
+
+  --dark-field: var(--pg-chrome);
+  --dark-field-foreground: #ffffff;
+  --console: var(--pg-chrome);
+  --console-foreground: #ffffff;
+
+  /* ---- radius scale ---------------------------------------------------------------------
+     DESIGN.md's own token names and values. `--radius` is shadcn's single knob; the rest are
+     the Cohere ladder, because "22px on major media cards" is a specific claim the system
+     makes and a generic 0.5rem cannot express it. */
+  /* Cohere `md` — "medium product cards and grouped blocks", which is what the panels in
+     `styles.css` are. The kit itself never reads bare `--radius`; it names the step it wants. */
+  --radius: 16px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 30px;
+  --radius-pill: 32px;
+  --radius-full: 9999px;
+
+  /* ---- spacing --------------------------------------------------------------------------- */
+  --space-xxs: 2px;
+  --space-xs: 6px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+  --space-section: 80px;
+
+  /* ---- type -----------------------------------------------------------------------------
+     The proprietary faces (CohereText, Unica77 Cohere Web, CohereMono) are not redistributable
+     and DESIGN.md's own "Known Gaps" says to use the documented fallbacks — which is what these
+     are. No webfont is fetched: `DEMO_MODE` has to run with no network, and a hero headline
+     that reflows on a train is worse than one that never had the licensed face. */
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
+
+  /* Display sizes fluid between the mobile and desktop ends of DESIGN.md's own ladder, so the
+     96px hero is 96px on a large desktop and never overflows a 375px phone. */
+  --text-hero: clamp(2.75rem, 7vw, 6rem); /* → 96px */
+  --text-product: clamp(2.25rem, 5.5vw, 4.5rem); /* → 72px */
+  --text-section: clamp(2rem, 4vw, 3.75rem); /* → 60px */
+  --text-heading: clamp(1.75rem, 3vw, 3rem); /* → 48px */
+  --text-card: clamp(1.375rem, 2vw, 2rem); /* → 32px */
+  --text-feature: 1.5rem; /* 24px */
+  --text-body-lg: 1.125rem; /* 18px */
+  --text-body: 1rem; /* 16px */
+  --text-button: 0.875rem; /* 14px */
+  --text-caption: 0.875rem; /* 14px */
+  --text-micro: 0.75rem; /* 12px */
+
+  /* Negative tracking is the single most recognisable thing about the display type. */
+  --tracking-hero: -0.02em;
+  --tracking-display: -0.02em;
+  --tracking-heading: -0.01em;
+  --tracking-mono: 0.02em;
+
+  /* ---- elevation ------------------------------------------------------------------------
+     "Do not add heavy drop shadows to cards." These exist for the two places depth is real —
+     a panel that slides over the page, and a control that lifts on hover — and nowhere else. */
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 2px 6px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 10px 30px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 28px 70px rgb(0 0 0 / 0.6);
+
+  --transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- legacy bridge ---------------------------------------------------------------------
+     `styles.css` predates this file and reads these. Re-pointing them is what turns the whole
+     product paddock green in one edit rather than 1,700. Keep them: a live alias, not a shim. */
+  --bg: var(--pg-bg);
+  --bg-elevated: var(--pg-chrome);
+  --bg-input: rgb(255 255 255 / 0.05);
+  --line: var(--pg-border);
+  --text: #ffffff;
+  --text-dim: var(--pg-ink-muted);
+  --accent-deep: var(--pg-primary-fill);
+  --user-bubble: var(--pg-mint-soft);
+  --danger: var(--cohere-coral);
+}
+
+/* ---- base ------------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 1.5;
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* "Avoid heavy bold weights. Size, spacing, and surface contrast do most of the hierarchy
+   work." Headings therefore inherit 400–500, not the browser's 700. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 500;
+  letter-spacing: var(--tracking-heading);
+  line-height: 1.2;
+}
+
+/* One focus treatment for the entire product. Mint rather than the old focus blue: on this
+   ground blue disappears into the photography, and the accent is the only colour guaranteed to
+   read against every surface in the system. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--pg-mint);
+  color: var(--pg-primary-ink);
+}
+
+/* Every motion in this design system is decorative. Honour the OS switch globally rather than
+   remembering to at each call site. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

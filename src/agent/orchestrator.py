@@ -25,6 +25,7 @@ from claude_agent_sdk import (
     Message,
 )
 
+from src.adapters.dealer_store import DealerDirectory, InMemoryDealerDirectory
 from src.adapters.store import InMemoryListingStore, ListingStore
 from src.agent.guardrails import (
     AuditLog,
@@ -118,8 +119,14 @@ class CardinalOrchestrator:
         *,
         store: ListingStore | None = None,
         session_store: SessionStateStore | None = None,
+        dealers: DealerDirectory | None = None,
     ) -> None:
         self._store = store or InMemoryListingStore.seeded()
+        #: PLAN-02 P13 -- who is selling each listing, so `render_results` can attribute a
+        #: card to a business a buyer can call. Defaults to the same generated directory the
+        #: seeded in-memory catalogue's `dealer_id`s point at; anything else would resolve to
+        #: `None` and silently drop attribution rather than fail loudly.
+        self._dealers = dealers or InMemoryDealerDirectory.seeded()
         self._session_store = session_store or InMemorySessionStateStore()
         self._audit_log = AuditLog()
         self._states: dict[str, SessionState] = {}
@@ -257,6 +264,7 @@ class CardinalOrchestrator:
                     sink=self.ui_sink(session_id),
                     registry=self._ui_registries[session_id],
                     store=self._store,
+                    dealers=self._dealers,
                     phase=_current_phase,
                 ),
                 "booking": build_booking_server(
@@ -264,6 +272,7 @@ class CardinalOrchestrator:
                     session_id=session_id,
                     sink=self.ui_sink(session_id),
                     store=self._store,
+                    dealers=self._dealers,
                 ),
             },
             agents=build_roster(),

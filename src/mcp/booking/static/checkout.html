@@ -9,8 +9,6 @@
         --color-surface: #ffffff;
         --color-border: #d0d0d0;
         --color-accent: #2f6fed;
-        --color-mock: #b34700;
-        --color-mock-bg: #fff3e6;
         --color-authorize: #4ade9b;
         --color-authorize-deep: #16a34a;
         --color-authorize-shadow: #0f3d26;
@@ -20,8 +18,6 @@
         --color-surface: #1a1a1a;
         --color-border: #3a3a3a;
         --color-accent: #6ea1ff;
-        --color-mock: #ffb066;
-        --color-mock-bg: #3a2200;
         --color-authorize: #4ade9b;
         --color-authorize-deep: #16a34a;
         --color-authorize-shadow: #0a2618;
@@ -34,19 +30,12 @@
         color: var(--color-text-primary);
         background: var(--color-surface);
       }
-      /* CONSTITUTION I.5 / gate 8.10: unconditional, above the fold -- the very first thing
-         in the document, never gated behind the loading/ready toggle below. */
-      #mock-banner {
-        margin: 0 -16px 16px;
-        padding: 10px 16px;
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        text-align: center;
-        color: var(--color-mock);
-        background: var(--color-mock-bg);
-        border-bottom: 1px solid var(--color-mock);
-      }
+      /* The MOCK -- NO REAL PAYMENT banner formerly lived here (CONSTITUTION I.5 / gate 8.10).
+         Removed per D-091: the product owner asked for every mock/demo disclosure banner
+         removed from the running UI, and confirmed the removal after being told it would take
+         this one with it. The rule it enforced -- the checkout is not a real payment processor
+         -- is still true and is still stated in README.md and DECISIONS.md; it is simply no
+         longer painted onto the form itself. */
       h1 { font-size: 16px; margin: 12px 0 4px; }
       .summary { font-size: 13px; opacity: 0.8; margin-bottom: 16px; }
       .summary .total { font-size: 20px; font-weight: 700; opacity: 1; display: block; margin-top: 4px; }
@@ -153,10 +142,38 @@
       .status[data-outcome="rejected"] { background: #fdecea; color: #a41c1c; }
       #loading { font-size: 13px; opacity: 0.7; margin-top: 8px; }
       #form-root { display: none; }
+      /* PLAN-02 P14: the payee disclosure. Bordered and set apart rather than blended into
+         the summary -- it is a statement of fact about where money goes, not decoration. */
+      #payee {
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--color-border, #d0d5dd);
+        border-radius: 8px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      #payee h2 {
+        margin: 0 0 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        opacity: 0.65;
+      }
+      #payee-legal { font-weight: 700; }
+      #payee-address, #payee-phone { opacity: 0.85; }
+      #payee-status { margin-top: 6px; font-weight: 600; }
+      /* Verified is stated calmly; anything else is stated loudly. Both are stated. */
+      #payee-status[data-flag="no"] { color: #067647; }
+      #payee-status[data-flag="yes"] {
+        padding: 6px 8px;
+        border-radius: 6px;
+        background: #fef3f2;
+        color: #b42318;
+      }
     </style>
   </head>
   <body>
-    <div id="mock-banner" data-testid="mock-banner">MOCK &mdash; NO REAL PAYMENT</div>
     <div id="loading">Loading checkout&hellip;</div>
     <form id="form-root">
       <h1>Checkout</h1>
@@ -164,6 +181,22 @@
         <span id="summary-line"></span>
         <span class="total" id="summary-total"></span>
       </p>
+
+      <!--
+        PLAN-02 P14 / proposal doc #8: who receives this money, stated before the pay button
+        rather than after. Placed here deliberately -- directly under the total and well
+        above `#pay-button` -- because gate 14.4 asserts it renders above the fold and above
+        the pay control. For a transaction the size of a car, "who exactly am I paying" is
+        not a nice-to-have, and a system that does not answer it proactively invites the
+        suspicion that it is hiding something.
+      -->
+      <section id="payee" data-testid="payee-block" aria-label="Who you are paying">
+        <h2>Paying</h2>
+        <div id="payee-legal" data-testid="payee-legal-name"></div>
+        <div id="payee-address" data-testid="payee-address"></div>
+        <div id="payee-phone" data-testid="payee-phone"></div>
+        <div id="payee-status" data-testid="payee-status" data-flag=""></div>
+      </section>
 
       <fieldset id="financing-box" style="display: none;">
         <legend>Financing (optional)</legend>
@@ -291,6 +324,41 @@
           "Est. " + money(monthly, toolInput.total_currency) + " / month";
       }
 
+      /**
+       * PLAN-02 P14 -- render who is receiving the money.
+       *
+       * Never hides the block. An unknown payee renders as an explicit "we could not confirm
+       * who receives this payment", because an *absent* disclosure reads as "there is nothing
+       * to disclose" -- which is precisely the impression this feature exists to prevent.
+       * Every field comes from `toolInput`, which `open_checkout` resolved server-side from
+       * the listing's own dealer; nothing here is client-supplied.
+       */
+      function applyPayee(input) {
+        var known = input.payee_known === true;
+        var flagged = input.payee_needs_flag !== false;
+
+        document.getElementById("payee-legal").textContent =
+          known ? input.payee_legal_name : "Payee could not be confirmed";
+        document.getElementById("payee-address").textContent = known
+          ? [input.payee_address, input.payee_city, input.payee_country].filter(Boolean).join(", ")
+          : "";
+        document.getElementById("payee-phone").textContent =
+          known && input.payee_phone ? input.payee_phone : "";
+
+        var status = document.getElementById("payee-status");
+        status.dataset.flag = flagged ? "yes" : "no";
+        if (!known) {
+          status.textContent = "PAYEE IDENTITY UNVERIFIED — we could not confirm who receives this payment.";
+        } else if (flagged) {
+          status.textContent =
+            input.payee_verification === "pending"
+              ? "PAYEE IDENTITY UNVERIFIED — this business is still being checked."
+              : "PAYEE IDENTITY UNVERIFIED — this business has not been checked.";
+        } else {
+          status.textContent = "Verified business.";
+        }
+      }
+
       function applyPrefill(input) {
         toolInput = input;
         document.getElementById("summary-line").textContent =
@@ -304,6 +372,7 @@
           });
           refreshFinancingDisplay();
         }
+        applyPayee(input);
         if (input.customer_name) document.getElementById("card_name").value = input.customer_name;
 
         document.getElementById("loading").style.display = "none";

@@ -28,6 +28,9 @@ def matches(listing: Listing, q: SearchQuery) -> bool:
         if listing.brand.casefold() not in wanted:
             return False
 
+    if q.conditions and listing.condition not in q.conditions:
+        return False
+
     if q.fuel_types and listing.fuel_type not in q.fuel_types:
         return False
 

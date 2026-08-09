@@ -1,0 +1,473 @@
+/**
+ * The kit's stylesheet.
+ *
+ * One rule per component, then one rule per variant keyed off `[data-variant]` — the same
+ * matrix shadcn expresses with `cva`, written where CSS can see it. Nothing here reaches
+ * outside `.ui-*`; product surfaces compose these, they do not patch them.
+ */
+
+/* ---- Button ------------------------------------------------------------------------------
+   The pill CTA is the signature control: "Keep primary CTAs pill-shaped and near-black on
+   light surfaces." Radius is `--radius-pill` (32px) for every filled variant. */
+
+.ui-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: var(--text-button);
+  font-weight: 500;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: 12px 24px;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color var(--transition),
+    border-color var(--transition),
+    color var(--transition),
+    transform var(--transition),
+    box-shadow var(--transition);
+}
+
+.ui-button:disabled,
+.ui-button[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.ui-button > svg {
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+}
+
+.ui-button[data-variant="default"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.ui-button[data-variant="default"]:hover {
+  background: color-mix(in oklab, var(--primary) 88%, #ffffff);
+}
+
+/* For placement *on* a dark field, where the near-black pill would vanish. */
+.ui-button[data-variant="inverse"] {
+  background: #ffffff;
+  color: var(--cohere-primary);
+}
+.ui-button[data-variant="inverse"]:hover {
+  background: color-mix(in oklab, #ffffff 90%, var(--cohere-soft-stone));
+}
+
+.ui-button[data-variant="secondary"] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+.ui-button[data-variant="secondary"]:hover {
+  background: color-mix(in oklab, var(--secondary) 88%, var(--cohere-ink));
+}
+
+/* `button-pill-outline`: transparent fill, 1px dark border, 30px radius. */
+.ui-button[data-variant="outline"] {
+  background: transparent;
+  color: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 28%, transparent);
+  border-radius: var(--radius-xl);
+}
+.ui-button[data-variant="outline"]:hover {
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 4%, transparent);
+}
+
+.ui-button[data-variant="ghost"] {
+  background: transparent;
+  color: var(--foreground);
+}
+.ui-button[data-variant="ghost"]:hover {
+  background: var(--muted);
+}
+
+/* `button-secondary` upstream: a text action, not a second button. Cohere renders most
+   companion actions this way, so the underline is the default state and not a hover effect. */
+.ui-button[data-variant="link"] {
+  background: transparent;
+  color: var(--foreground);
+  border-radius: var(--radius-xs);
+  padding: 8px 0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+}
+.ui-button[data-variant="link"]:hover {
+  text-decoration-color: currentColor;
+}
+
+.ui-button[data-variant="destructive"] {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+.ui-button[data-variant="destructive"]:hover {
+  background: color-mix(in oklab, var(--destructive) 88%, #000000);
+}
+
+.ui-button[data-size="sm"] {
+  font-size: var(--text-micro);
+  padding: 8px 16px;
+}
+.ui-button[data-size="lg"] {
+  font-size: var(--text-body);
+  padding: 16px 32px;
+}
+.ui-button[data-size="icon"],
+.ui-button[data-size="icon-sm"] {
+  padding: 0;
+  border-radius: var(--radius-full);
+  aspect-ratio: 1;
+}
+.ui-button[data-size="icon"] {
+  width: 44px;
+  height: 44px;
+}
+.ui-button[data-size="icon-sm"] {
+  width: 32px;
+  height: 32px;
+}
+
+/* ---- Card --------------------------------------------------------------------------------
+   Flat by default. The only shadow in the set is on `media`, where a rounded image lifting off
+   a white field is the documented "Media Lift" treatment rather than decoration. */
+
+.ui-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--cohere-card-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xl) 0;
+}
+
+.ui-card[data-variant="stone"] {
+  background: var(--secondary);
+  border-color: transparent;
+  padding: var(--space-xxl) 0;
+}
+
+.ui-card[data-variant="console"] {
+  background: var(--console);
+  color: var(--console-foreground);
+  border-color: color-mix(in oklab, #ffffff 12%, transparent);
+}
+
+.ui-card[data-variant="field"] {
+  background: var(--dark-field);
+  color: var(--dark-field-foreground);
+  border-color: color-mix(in oklab, #ffffff 14%, transparent);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xxl) 0;
+}
+
+.ui-card[data-variant="media"] {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-color: transparent;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+/* On dark cards the description and separators need the inverted muted tone, or they read as
+   "broken grey" against near-black. */
+.ui-card[data-variant="console"] .ui-card-description,
+.ui-card[data-variant="field"] .ui-card-description {
+  color: color-mix(in oklab, #ffffff 68%, transparent);
+}
+.ui-card[data-variant="console"] .ui-separator,
+.ui-card[data-variant="field"] .ui-separator {
+  background: color-mix(in oklab, #ffffff 16%, transparent);
+}
+
+.ui-card-header {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: var(--space-sm);
+  padding-inline: var(--space-xl);
+}
+.ui-card-header:has(.ui-card-action) {
+  grid-template-columns: 1fr auto;
+}
+
+.ui-card[data-variant="stone"] .ui-card-header,
+.ui-card[data-variant="stone"] .ui-card-content,
+.ui-card[data-variant="stone"] .ui-card-footer,
+.ui-card[data-variant="field"] .ui-card-header,
+.ui-card[data-variant="field"] .ui-card-content,
+.ui-card[data-variant="field"] .ui-card-footer {
+  padding-inline: var(--space-xxl);
+}
+
+.ui-card-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-feature);
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: var(--tracking-heading);
+}
+
+.ui-card-description {
+  font-size: var(--text-caption);
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+
+.ui-card-action {
+  grid-column-start: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+  justify-self: end;
+}
+
+.ui-card-content {
+  padding-inline: var(--space-xl);
+}
+
+.ui-card-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding-inline: var(--space-xl);
+}
+
+/* ---- Badge -------------------------------------------------------------------------------
+   Coral is confined to this file, and inside this file to one variant. That containment is the
+   rule "do not turn coral or blue into broad decorative surface colors" made structural. */
+
+.ui-badge {
+  display: inline-flex;
+  width: fit-content;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+  font-size: var(--text-micro);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ui-badge[data-variant="default"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.ui-badge[data-variant="secondary"] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+.ui-badge[data-variant="outline"] {
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.ui-badge[data-variant="coral"] {
+  background: color-mix(in oklab, var(--cohere-coral) 14%, #ffffff);
+  border-color: var(--cohere-coral-soft);
+  color: color-mix(in oklab, var(--cohere-coral) 70%, var(--cohere-ink));
+}
+.ui-badge[data-variant="success"] {
+  background: var(--cohere-pale-green);
+  border-color: color-mix(in oklab, var(--accent) 24%, transparent);
+  color: var(--accent);
+}
+.ui-badge[data-variant="destructive"] {
+  background: color-mix(in oklab, var(--destructive) 8%, #ffffff);
+  border-color: color-mix(in oklab, var(--destructive) 28%, transparent);
+  color: var(--destructive);
+}
+
+/* The uppercase mono system marker. */
+.ui-badge[data-variant="mono"] {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-weight: 400;
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* ---- Input / Label / Field --------------------------------------------------------------- */
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.ui-label {
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.ui-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--input);
+  /* "Inputs are rectangular with thin gray borders" — 4px, not the pill used for buttons. */
+  border-radius: var(--radius-xs);
+  padding: 12px 16px;
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+
+.ui-input::placeholder {
+  color: var(--cohere-muted);
+}
+
+/* Two focus signals answering two questions: the violet border is Cohere's documented
+   `form-focus`, and the blue ring from `tokens.css` says where the keyboard is. */
+.ui-input:focus {
+  outline: none;
+  border-color: var(--cohere-form-focus, #9b60aa);
+}
+.ui-input:focus-visible {
+  border-color: var(--cohere-form-focus, #9b60aa);
+}
+
+.ui-input:disabled {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  cursor: not-allowed;
+}
+
+.ui-input[aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+
+.ui-textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+/* The closed `<select>` inherits `.ui-input`'s colours, but the popup list is a separate
+   surface the browser paints itself with the OS's own opaque white unless `option` is styled
+   directly -- `color` set on the `<select>` does not reach it. Left alone, white text (from
+   `--foreground`) landed on that unstyled white popup and every option but the browser's own
+   highlighted row was invisible rather than merely low-contrast. Solid colours only:
+   gradients/opacity on `option` render inconsistently across browsers. */
+.ui-select option {
+  background-color: var(--card);
+  color: var(--foreground);
+}
+
+.ui-select {
+  appearance: none;
+  padding-right: 40px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--foreground) 50%),
+    linear-gradient(135deg, var(--foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) calc(50% + 2px),
+    calc(100% - 15px) calc(50% + 2px);
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+
+.ui-field-hint {
+  margin: 0;
+  font-size: var(--text-micro);
+  color: var(--muted-foreground);
+}
+
+.ui-field-error {
+  margin: 0;
+  font-size: var(--text-micro);
+  color: var(--destructive);
+}
+
+/* ---- Separator ---------------------------------------------------------------------------- */
+
+.ui-separator {
+  flex-shrink: 0;
+  background: var(--border);
+}
+.ui-separator[data-orientation="horizontal"] {
+  width: 100%;
+  height: 1px;
+}
+.ui-separator[data-orientation="vertical"] {
+  width: 1px;
+  align-self: stretch;
+}
+
+/* ---- Tabs ---------------------------------------------------------------------------------
+   Triggers are pills. Vertical lists left-align them, which is what the showroom facet rail is. */
+
+.ui-tabs-list {
+  display: flex;
+  gap: var(--space-sm);
+}
+.ui-tabs-list[data-orientation="vertical"] {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ui-tabs-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: var(--text-button);
+  font-weight: 500;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 10px 22px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition);
+}
+
+.ui-tabs-list[data-orientation="vertical"] .ui-tabs-trigger {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.ui-tabs-trigger:hover {
+  border-color: color-mix(in oklab, var(--primary) 40%, transparent);
+}
+
+.ui-tabs-trigger[data-state="active"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.ui-tabs-content:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}

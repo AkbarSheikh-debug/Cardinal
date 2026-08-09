@@ -13,6 +13,7 @@ from collections.abc import Callable
 from claude_agent_sdk import create_sdk_mcp_server
 from claude_agent_sdk.types import McpSdkServerConfig
 
+from src.adapters.dealer_store import DealerDirectory
 from src.adapters.store import ListingStore
 from src.mcp.audience import Audience, for_audience
 from src.mcp.ui.sink import UISink
@@ -29,9 +30,15 @@ def build_ui_server(
     sink: UISink | None = None,
     registry: SurfaceRegistry | None = None,
     store: ListingStore | None = None,
+    dealers: DealerDirectory | None = None,
     phase: Callable[[], str] | None = None,
 ) -> McpSdkServerConfig:
     specs = build_tool_specs(
-        session_id=session_id, sink=sink, registry=registry, store=store, phase=phase
+        session_id=session_id,
+        sink=sink,
+        registry=registry,
+        store=store,
+        dealers=dealers,
+        phase=phase,
     )
     return create_sdk_mcp_server(SERVER_NAME, tools=for_audience(specs, audience))

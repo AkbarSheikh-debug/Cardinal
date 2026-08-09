@@ -23,11 +23,20 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from src.adapters.booking_store import BookingStore, InMemoryBookingStore
+from src.adapters.cart_store import CartStore, InMemoryCartStore
 from src.adapters.db.booking_store import PostgresBookingStore
+from src.adapters.db.cart_store import PostgresCartStore
+from src.adapters.db.dealer_store import PostgresDealerDirectory
+from src.adapters.db.identity_store import PostgresAccountStore
+from src.adapters.db.lead_store import PostgresLeadStore
 from src.adapters.db.session import database_url, dispose_engine, session_factory
 from src.adapters.db.store import PostgresListingStore
+from src.adapters.dealer_store import DealerDirectory, InMemoryDealerDirectory
+from src.adapters.identity_store import AccountStore, InMemoryAccountStore
+from src.adapters.lead_store import InMemoryLeadStore, LeadStore
 from src.adapters.registry import registered_adapters, registered_source_names
 from src.adapters.store import InMemoryListingStore, ListingStore
+from src.adapters.voice import VoiceCascade
 from src.agent import demo_stream
 from src.agent.interview_chat import handoff_summary, interview_turn
 from src.agent.model_catalog import CLAUDE_MODEL_ID, visible_models
@@ -36,10 +45,21 @@ from src.agent.orchestrator import CardinalOrchestrator
 from src.agent.phase_machine import Phase
 from src.agent.providers import ProviderError
 from src.agent.tracing import configure_tracing
+from src.api.auth import current_account
+from src.api.auth import router as auth_router
+from src.api.cart import router as cart_router
+from src.api.leads import record_lead
+from src.api.seller import SellerEventHub
+from src.api.seller import router as seller_router
+from src.api.voice import router as voice_router
+from src.domain.identity import AccountRole
+from src.domain.lead import LeadEvent
 from src.mcp.apps.audit import AppAuditLog
 from src.mcp.apps.proxy import AppRpcError, call_view_rpc
+from src.mcp.audience import for_audience
 from src.mcp.booking.resources import ALLOWED_VIEW_TOOLS, BOOKING_FORM_URI, CHECKOUT_URI
 from src.mcp.booking.server import build_booking_server
+from src.mcp.booking.tools import build_tool_specs as build_booking_tool_specs
 from src.mcp.ui.actions import InvalidActionError, parse_action
 
 logger = logging.getLogger(__name__)
@@ -94,6 +114,44 @@ def build_booking_store(backend: str) -> BookingStore:
     if backend == "postgres":
         return PostgresBookingStore(session_factory())
     return InMemoryBookingStore()
+
+
+def build_cart_store(backend: str) -> CartStore:
+    """Same split again (PLAN-02 P14)."""
+    if backend == "postgres":
+        return PostgresCartStore(session_factory())
+    return InMemoryCartStore()
+
+
+def build_lead_store(backend: str) -> LeadStore:
+    """Same split again (PLAN-02 P15)."""
+    if backend == "postgres":
+        return PostgresLeadStore(session_factory())
+    return InMemoryLeadStore()
+
+
+def build_dealer_directory(backend: str) -> DealerDirectory:
+    """Same split again, one table over (PLAN-02 P13).
+
+    The in-memory branch is `seeded()` rather than empty: the in-memory catalogue's
+    `dealer_id`s point at the *generated* directory, so an empty one would resolve every
+    lookup to `None` and drop attribution from every card without failing anywhere visible.
+    """
+    if backend == "postgres":
+        return PostgresDealerDirectory(session_factory())
+    return InMemoryDealerDirectory.seeded()
+
+
+def build_account_store(backend: str) -> AccountStore:
+    """Same split as `build_store`/`build_booking_store`, one table over (PLAN-02 P12).
+
+    `InMemoryAccountStore` is what `DEMO_MODE` and a plain `TestClient(app)` get, which is
+    what keeps CONSTITUTION III.7 true for the login flow: signing in must work with the
+    entire environment unset.
+    """
+    if backend == "postgres":
+        return PostgresAccountStore(session_factory())
+    return InMemoryAccountStore()
 
 
 def _port_open(host: str, port: int) -> bool:
@@ -159,9 +217,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     #: process -- see `src/mcp/booking/tools.py`'s own note on why a fresh store per request
     #: would silently forget a minted gesture token or an in-flight idempotency key.
     app.state.booking_store = build_booking_store(backend)
+    #: PLAN-02 P12: accounts, profiles and session tokens. Process-lifetime like the booking
+    #: store -- an `InMemoryAccountStore` rebuilt per request would forget every live login.
+    app.state.account_store = build_account_store(backend)
+    #: PLAN-02 P13: who is selling each listing. Read by `render_results` for card
+    #: attribution today and by P14's payee disclosure next.
+    app.state.dealers = build_dealer_directory(backend)
+    #: PLAN-02 P14: the buyer's shortlist, account-scoped end to end.
+    app.state.cart_store = build_cart_store(backend)
+    #: Session ids whose next `submit_booking_draft` was started from `/cart` rather than by
+    #: the model, so `mcp_app_rpc` knows to open checkout after it. Process-lifetime and
+    #: intentionally small -- an entry is discarded the moment it is used.
+    app.state.cart_checkout_sessions = set()
+    #: PLAN-02 P16. Process-lifetime so the per-session demo-transcript cursor survives
+    #: between requests -- a fresh cascade per call would replay the first line forever.
+    app.state.voice = VoiceCascade()
+    #: PLAN-02 P15: leads, and the per-dealer SSE fan-out the console listens on. The hub is
+    #: process-lifetime for the same reason the orchestrator is -- a hub rebuilt per request
+    #: would hand every open `/seller/events` stream a queue nothing ever publishes into.
+    app.state.lead_store = build_lead_store(backend)
+    app.state.seller_events = SellerEventHub()
     #: PHASE-6 SS6: the orchestrator outlives any one request so a session's `SurfaceRegistry`
     #: and `QueueUISink` (gate 6.6's identity guarantee) survive between turns.
-    app.state.orchestrator = CardinalOrchestrator(store=store)
+    app.state.orchestrator = CardinalOrchestrator(store=store, dealers=app.state.dealers)
     #: PHASE-7: view-initiated RPC audit trail (SS5.5) and the lazily-started booking-mcp HTTP
     #: subprocess `_ensure_booking_mcp_http` owns -- both process-lifetime, like the orchestrator.
     app.state.app_audit_log = AppAuditLog()
@@ -183,6 +261,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Cardinal", version="0.1.0", lifespan=lifespan)
+
+#: PLAN-02 P12 -- `/auth/*` and the role-guarded `/seller/*`. A router rather than more
+#: routes in this module: identity is a self-contained surface, and P15 mounts its lead
+#: routes behind the same `require_role` guard rather than re-deriving one.
+app.include_router(auth_router)
+#: PLAN-02 P15 -- `/seller/*`. Every route resolves the dealership from the signed-in
+#: seller's own profile; none of them takes a dealer id, which is what makes gate 15.5's
+#: cross-seller isolation a property of the route shape (`src/api/seller.py`).
+app.include_router(seller_router)
+#: PLAN-02 P14 -- `/cart*`. Carries no payment surface of its own: checkout is the existing
+#: `ui://checkout/payment` MCP App, mounted on the cart page (PLAN-02 §0.1).
+app.include_router(cart_router)
+#: PLAN-02 P16 -- `/voice/*`. Works with every voice key unset: the cascade answers 204 and
+#: the browser speaks instead (CONSTITUTION III.7).
+app.include_router(voice_router)
 
 
 @app.get("/health")
@@ -429,6 +522,40 @@ async def start_demo_session(session_id: str) -> dict[str, Any]:
     return {"status": "started"}
 
 
+async def _record_draft_lead(request: Request, session_id: str, arguments: dict[str, Any]) -> None:
+    """PLAN-02 P15's third qualifying action: a submitted booking form.
+
+    Recorded here rather than inside `submit_booking_draft`'s own handler because that handler
+    lives in `src/mcp`, which may not import `fastapi` (CONSTITUTION II.1) and therefore
+    cannot see the request whose cookie says who is signed in. This is the seam where the two
+    facts meet, and it is deliberately the *only* place they do.
+
+    Silent on every failure, the same posture `record_lead` itself takes: a booking form that
+    500s because lead attribution hiccuped would trade the buyer's actual purchase for a
+    dealer's notification.
+    """
+    form_fields = arguments.get("form_fields") or {}
+    source, source_id = form_fields.get("source"), form_fields.get("source_id")
+    if not isinstance(source, str) or not isinstance(source_id, str):
+        return
+    try:
+        account = await current_account(request)
+        if account.role is not AccountRole.BUYER:
+            return
+        listing = await app.state.store.fetch(source, source_id)
+        if listing is None:
+            return
+        await record_lead(
+            request,
+            buyer_account_id=account.id,
+            listing=listing,
+            event=LeadEvent.BOOKING_SUBMITTED,
+            session_id=session_id,
+        )
+    except Exception:  # deliberately broad -- see this function's docstring
+        logger.debug("no lead recorded for submitted draft on %s", session_id, exc_info=True)
+
+
 @app.post("/mcp-apps/{session_id}/rpc")
 async def mcp_app_rpc(session_id: str, request: Request) -> dict[str, Any]:
     """The *only* thing a view (via the outer iframe, PHASE-7 SS5.1) ever calls -- this route
@@ -480,6 +607,10 @@ async def mcp_app_rpc(session_id: str, request: Request) -> dict[str, Any]:
                 audience="app",
                 session_id=session_id,
                 store=app.state.store,
+                # PLAN-02 P14: `open_checkout` resolves the payee from here. Without it the
+                # disclosure would render "could not be confirmed" for every listing -- safe,
+                # but wrong, and the kind of wrong nobody notices because it still renders.
+                dealers=app.state.dealers,
                 booking_store=app.state.booking_store,
             ),
             allowed_tools=allowed_tools,
@@ -489,6 +620,48 @@ async def mcp_app_rpc(session_id: str, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"{method} failed: {exc}") from exc
+
+    if method == "tools/call" and params.get("name") == "submit_booking_draft":
+        # PLAN-02 P15: submitting a booking form is a qualifying intent action, on the cart
+        # path and the in-chat path alike. Attributed to whoever the session cookie says is
+        # signed in -- an anonymous submission records nothing, because there is no buyer to
+        # route to and inventing one would be worse than the missing lead.
+        await _record_draft_lead(request, session_id, (params.get("arguments") or {}))
+
+    if (
+        method == "tools/call"
+        and params.get("name") == "submit_booking_draft"
+        and not demo_mode()
+        and session_id in app.state.cart_checkout_sessions
+    ):
+        # PLAN-02 P14's cart flow, outside DEMO_MODE. A human filled and submitted the booking
+        # form that `POST /cart/checkout` opened, so open checkout next -- the identical step
+        # `demo_stream.on_draft_submitted` performs below and the identical step a live model
+        # would take. It calls `open_checkout` and nothing else: no gesture token, no
+        # `confirm_booking` (CONSTITUTION I.2).
+        #
+        # Backgrounded behind the same deliberate delay, for the same reason D-051 records --
+        # pushing the checkout's `mcp_app_open` before this handler's response reaches the
+        # browser tears down the outer iframe the submitting fetch() is still in flight from.
+        draft_id = (params.get("arguments") or {}).get("booking_draft_id")
+        if isinstance(draft_id, str):
+
+            async def _cart_checkout_after_submit(draft_id: str = draft_id) -> None:
+                await asyncio.sleep(0.3)
+                specs = build_booking_tool_specs(
+                    session_id=session_id,
+                    sink=app.state.orchestrator.ui_sink(session_id),
+                    store=app.state.store,
+                    dealers=app.state.dealers,
+                    booking_store=app.state.booking_store,
+                )
+                handlers = {spec.name: spec.handler for spec in for_audience(specs, "app")}
+                await handlers["open_checkout"]({"booking_draft_id": draft_id})
+
+            task = asyncio.create_task(_cart_checkout_after_submit())
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+            app.state.cart_checkout_sessions.discard(session_id)
 
     if demo_mode() and method == "tools/call" and params.get("name") == "submit_booking_draft":
         # PHASE-11 SS6's checkout beat: a human's real click just submitted the booking form

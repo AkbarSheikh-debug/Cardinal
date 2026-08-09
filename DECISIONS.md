@@ -1,4 +1,4 @@
-# Decisions
+﻿# Decisions
 
 The *why* behind anything non-obvious that the plan docs don't already carry
 (CONSTITUTION III.5). Each entry names the alternative that was rejected and the reason —
@@ -29,18 +29,18 @@ mixed buy/rent result set instead of two incomparable ones, and it tracks `price
 
 ## D-002 — Gate 1.8 measures against the declared noise sigma, not cohort sample statistics
 
-**Phase 1.** The obvious implementation of "no listing is >2σ off its cohort's price band" computes
+**Phase 1.** The obvious implementation of "no listing is >2Ïƒ off its cohort's price band" computes
 the mean and standard deviation of each `(category, brand_tier)` cohort and z-scores against those.
-It was implemented that way first and it reported a **2.1σ outlier** on a catalogue whose price
+It was implemented that way first and it reported a **2.1Ïƒ outlier** on a catalogue whose price
 noise is bounded at ±8% by construction.
 
 The reason is cohort size, not data quality. With ~4–20 rows per cohort, the sample σ can
-under-estimate the true σ by enough to manufacture an outlier, and the criterion then fails or
+under-estimate the true Ïƒ by enough to manufacture an outlier, and the criterion then fails or
 passes according to how the seed happened to partition the rows.
 
 The check now measures each listing's residual against `PRICE_NOISE_SIGMA` — the standard deviation
 of the uniform noise the generator actually applies — around a mean of 1.0. The bound becomes
-arithmetic: max |z| = 0.08/σ = 1.73, always. A price that stopped deriving from the model would land
+arithmetic: max |z| = 0.08/Ïƒ = 1.73, always. A price that stopped deriving from the model would land
 far outside it, which is the thing the criterion exists to catch.
 
 **Rejected:** re-rolling the seed until the sample-statistics version passed. That would have made a
@@ -1667,3 +1667,689 @@ this entry makes concrete: **the live path needs periodic real rehearsal, and th
 to debug it is to dump the message stream, not to reason about it.** Note also that fix (1)
 *created* symptom (3) -- unblocking one guardrail activated another that had never run. Fixes
 in this layer should be re-verified live, not assumed.
+
+---
+
+## D-068 — Income is captured exactly and narrowed at every boundary, not coarsened at capture
+
+**PLAN-02 P12 / §0.3.** The requested field was "how much they earn". The first draft of the
+plan refused the exact figure outright and stored only an `IncomeBand`, on privacy grounds.
+That was over-corrected: a band alone loses real information at the boundaries (EUR 26,000 and
+EUR 49,000 are not the same buyer), and the hackathon brief says nothing about income either
+way, so this was a design call rather than a compliance one.
+
+`BuyerProfile.annual_income` now holds the exact figure and `income_band` is a **derived**
+`computed_field`. Containment happens at every boundary the value crosses rather than at
+capture: the figure never leaves the owner's own account (`GET /auth/me` is the only route that
+returns it), only the band reaches P15's lead scorer, neither is shown to a seller, neither is
+serialised into a model prompt, and both are redacted before span export.
+
+**Rejected:** storing only the band. Keeps less, protects no better than containment does, and
+throws away the input a financing pre-check actually needs.
+
+**Rejected:** storing the band as its own column. Two representations of one fact drift apart
+the first time a backfill touches one and not the other. Deriving it means gate 12.8 cannot be
+made to fail by a crafted request body — there is no setter to attack.
+
+---
+
+## D-069 — `/` stays unauthenticated; identity is required at checkout, not at the front door
+
+**PLAN-02 P12 §2.1.** The first draft of `web/src/routes.tsx` wrapped the buyer chat in
+`RequireRole`, since "add login" reads like "put a guard on the app". Two things made that
+wrong, and the second is not a matter of taste:
+
+1. **It would have turned gates 6.2, 7.x and 11.3 red.** All three drive the real product at
+   `/` with no session. A guard there fails every one of them for a reason unrelated to what
+   they assert — and gate 11.3 in particular is the seven-beat demo the video is recorded from.
+2. **It is the wrong product.** The brief's flow is interview → research → recommend. Demanding
+   a signup before the agent has said a word is the fastest way to make a good demo feel like a
+   bad one.
+
+So the session is *used* when present and simply absent otherwise. P14's checkout is where a
+session becomes required, which is also the first point a name and a phone number mean anything.
+`web/tests/auth.spec.ts` asserts `/` stays reachable anonymously so this cannot be "fixed" back.
+
+---
+
+## D-070 — Gate 12's `TestClient` criteria pin the in-memory backend; only 12.5 talks to Postgres
+
+**PLAN-02 P12.** Criteria 12.1/12.4/12.8/12.10 (and every test in
+`tests/integration/test_api_auth.py`) run against `InMemoryAccountStore` regardless of whether
+`CARDINAL_DATABASE_URL` is set. Two reasons:
+
+1. **They are transport and authorisation tests.** What a route returns for a given caller is a
+   different question from whether a row survives a restart. 12.5 asks the second question
+   directly, against real Postgres, through `run_async`.
+2. **On native Windows they cannot run against Postgres at all.** `TestClient` drives the app on
+   a `ProactorEventLoop`; psycopg's async mode refuses that loop outright — the same interaction
+   PROGRESS.md already records for gate 8 and that `src/adapters/db/session.py`'s `run_async`
+   exists to work around for CLI entry points. Without pinning, all 14 API tests fail with an
+   `InterfaceError` the moment the env var happens to be set.
+
+**Rejected:** letting the environment decide. A gate that goes red on Windows for an event-loop
+mismatch is a gate people learn to ignore, which is worse than not having it.
+
+---
+
+## D-071 — The auth denylist scans for signing-secret *shapes*, not a bare `SECRET_KEY`
+
+**PLAN-02 P12, gate 12.3.** The first version of the denylist included `SECRET_KEY` and went
+red immediately on `LANGFUSE_SECRET_KEY` in `src/agent/tracing.py` and `scripts/gate_phase11.py`
+— a legitimate third-party API credential P9 reads from the environment, and neither a JWT
+library nor a secret this codebase signs anything with.
+
+Replaced with `JWT_SECRET`/`AUTH_SECRET`/`SESSION_SECRET`/`TOKEN_SECRET`/`SIGNING_KEY`. This is
+the same carve-out CONSTITUTION I.3 already makes for "BMW" as a seeded brand name versus a BMW
+Group endpoint, and D-044 makes for the payment denylist: scan for the thing, not for a
+substring that appears inside the thing's innocent neighbours. A denylist with a known false
+positive gets suppressed wholesale the first time it blocks a real change.
+
+Both lockfiles are in scope, though — a transitive JWT dependency is exactly as much of a
+problem as a direct one.
+
+---
+
+## D-072 — P13's new listing fields draw from a per-listing RNG, not the generator's main stream
+
+**PLAN-02 P13.** The first version of `_build_listing` picked `dealer_id` and `condition` from
+the same `rng` every other field uses. That consumed two extra draws per listing, which
+shifted every subsequent draw — so **adding a dealer changed which cars the generator
+produced.** It surfaced as
+`test_every_car_the_demo_script_surfaces_has_its_own_model` going red: thirteen models with no
+hand-built 3D asset (D-060's finite set) had wandered into the demo's results.
+
+Both fields now draw from `random.Random(f"p13:{source}:{source_id}")` — seeded on the natural
+key, so still deterministic across processes and across runs (gates 1.6/13.2 both still compare
+two runs byte for byte), while leaving every pre-P13 field bit-identical.
+
+The general rule this encodes, worth applying to every future phase that adds a generated
+field: **a new field must not retroactively change an old one.** Gate 1.8's price correlations,
+gate 5.4's golden set and gate 11.3's seven-beat demo are all statements about a specific
+catalogue; silently regenerating it under them turns those gates into assertions about
+whatever the generator happens to emit today.
+
+**Rejected:** adding the thirteen new models to `vehicle_models.py`. It would have made the
+test pass while leaving the actual problem — an unstable catalogue — in place, and the next
+phase to add a field would have hit it again.
+
+---
+
+## D-073 — Dealer names are checked against a denylist derived from the live brand pool
+
+**PLAN-02 P13, gate 13.3.** Generating names from parts does not by itself make them
+fictional: `"{prefix} {core} {city}"` over a pool that contains real manufacturer names is one
+careless edit away from emitting "Suzuki Motors Berlin", and a fictional-but-plausible dealer
+carrying a real brand's name with an invented phone number reads as impersonation of a real
+business.
+
+`real_world_denylist()` is built from `taxonomy.BRAND_TIERS` at call time plus a small list of
+real dealer groups, rather than hand-copied — so adding a brand to the taxonomy automatically
+widens the check instead of leaving a silent gap. `assert_no_real_world_collisions` runs inside
+`generate_dealers` (a colliding name never reaches a catalogue) *and* in gate 13.3 (which also
+plants "Toyota Motors Berlin" to prove the check can actually fire — CONSTITUTION III.8's
+"watch it fail" applied to a validator rather than a criterion).
+
+**Rejected:** eyeballing the generated list once. It was clean on the first run, which is
+exactly how this kind of check gets skipped and then quietly stops holding.
+
+---
+
+## D-074 — `PayeeIdentity.needs_flag` treats `PENDING` as needing a visible caution
+
+**PLAN-02 P13/P14.** `VerificationStatus` has three values, and the tempting reading is that
+only `UNVERIFIED` earns a warning. It doesn't: "we haven't finished checking who this business
+is" is information a buyer about to send money is entitled to, and collapsing it into the
+verified case is precisely the silence P14's payee disclosure exists to prevent.
+
+So `needs_flag` is `not is_verified` — anything short of a positive verification is flagged.
+There is also deliberately no `None`/"unknown" state: a payee whose status nobody established
+is what `UNVERIFIED` means, and giving that one fact two spellings is how one of them ends up
+rendering as a blank badge.
+
+`PayeeIdentity` is a separate type from `Dealer` rather than the checkout being handed a whole
+`Dealer`, for the same reason D-026 built a dedicated render model for `ScoreBreakdown`: a
+surface that receives the full entity starts rendering fields nobody reviewed for that context.
+
+---
+
+## D-075 — The dealer directory is seeded before listings, in the same transaction
+
+**PLAN-02 P13.** `listings.dealer_id` carries a real foreign key, so `scripts/seed_marketplace`
+had to grow a dealer pass — and that pass has to `flush()` before the listing pass, or Postgres
+rejects every row. The FK deliberately has **no** `ON DELETE CASCADE`: deleting a dealer must
+not silently delete their inventory, and `RESTRICT` turns that into a loud error instead.
+
+Worth noting for P14/P15: this is the second time in two phases that SQLAlchemy's unit of work
+emitted a dependent INSERT before the row it depends on (D-072's sibling problem in
+`PostgresAccountStore.verify_otp`). The pattern is the same both times — a plain `ForeignKey`
+with no `relationship()` between the mappers gives the unit of work no dependency edge to sort
+by. An explicit `flush()` between the two adds is the local fix; declaring relationships purely
+to fix insert ordering would add lazy-load machinery neither store wants.
+
+---
+
+## D-076 — `/cart` is the page; every cart API route lives one level down
+
+**PLAN-02 P14.** PLAN-02 §2.2 warned that each new API prefix needs a block in both
+`web/nginx.conf` and `web/vite.config.ts`, and named `/cart` as one of them. What it did not
+foresee is that `/cart` is the one prefix that *collides with itself*: it is simultaneously the
+buyer's page route and, as originally specified (`GET /cart`), an API route. A proxy sees one
+path and cannot tell a navigation from a `fetch()` — so whichever side wins, the other breaks.
+Proxy it and the page returns a JSON 401; don't, and the fetch parses `index.html` as JSON,
+which is D-057 for the third time.
+
+Content negotiation (`Accept: text/html` → SPA) would work and is the wrong fix: it makes a
+routing decision depend on a header, so the failure mode moves from "obvious 401" to "works in
+the browser, breaks in curl, and nobody can see why from either config file".
+
+So the API keeps strictly to `/cart/...`: `GET|POST /cart/items`, `DELETE /cart/items/{id}`,
+`POST /cart/checkout`, `GET /cart/count`. `location /cart/` and Vite's `"/cart/"` (both prefix
+matches that exclude the bare path, and both with a load-bearing trailing slash) take the API;
+the SPA fallback takes `/cart`. The split is a property of the path shape, visible in one line
+of each config.
+
+The plan's `GET /cart` therefore became `GET /cart/items`. Asserted, not just written down:
+`tests/integration/test_api_cart.py::test_there_is_no_bare_cart_route` checks the router
+carries no bare `/cart` **and** that the app really 404s it, so the collision cannot reappear
+by someone adding the "obvious" route back.
+
+---
+
+## D-077 — Add-to-cart is a browser mutation carrying the buyer's cookie, not an agent tool
+
+**PLAN-02 P14, gate 14.7.** The plan asks for an `add_to_cart` action on `CarCard`, dispatched
+through P6's existing action round-trip. The round-trip alone only records provenance
+(`POST /sessions/{id}/actions`); something still has to change the cart. Making that a
+`booking-mcp`/`ui-mcp` tool would have been the smaller diff and would have quietly recreated
+the problem CONSTITUTION I.2 exists to prevent — an agent-reachable path to a commercial
+commitment, guarded only by a permission check somebody has to keep correct.
+
+Instead: `App.tsx`'s action handler performs the authenticated `POST /cart/items` **from the
+browser**, with the buyer's httpOnly session cookie. The agent process holds no such
+credential. So "no agent-driven path adds to cart" is not enforced anywhere — it is true
+because the only actor that *can* mutate a cart is the one holding the cookie, and that is a
+browser with a person in front of it. The same reasoning D-012 records for `confirm_booking`'s
+invisibility: the strongest guard is the one that had nothing to guard.
+
+`add_to_cart` still goes through `postAction` first, unconditionally, so gate 6.5's provenance
+record is unchanged and an add is auditable as an action like every other click.
+
+---
+
+## D-078 — `/cart` renders `App` in cart mode; it is not a second page with its own chat rail
+
+**PLAN-02 P14 / §0.1.** The brief requires payment to happen "without leaving the
+conversation", and §0.1's answer is a `/cart` route with the chat rail still mounted. The
+obvious build is a `CartPage` component with its own rail, its own session id and its own SSE
+subscription. That would satisfy the *description* and fail the *point*: two rails on two
+sessions are two conversations that happen to look alike, and the judge's obvious question —
+"is that the same agent?" — would have the answer "no".
+
+So `/cart` renders `<App mode="cart" />`. Same component, same `sessionId()`, same
+`EventSource`, same `McpAppHost`; only the canvas slot differs, showing `CartPanel` where the
+A2UI surfaces would be. The conversation is never left because there is only one of it.
+
+This also made the checkout mount free: `POST /cart/checkout` pushes an `mcp_app_open` onto the
+session's existing sink, and the host `App` already renders was already listening. Gate 14.2
+reads the resource URI straight off that host element (`data-resource-uri`, added for this) and
+sees `ui://checkout/payment` — the same resource, not a second copy of it.
+
+**Cost, recorded honestly:** A2UI surfaces the agent composes while the buyer is on `/cart` are
+processed but not displayed, since the canvas slot is occupied. The chat rail still narrates
+them. Splitting the canvas would be the `[SCALE]` fix; it is not worth the layout on a 1280px
+demo screen.
+
+---
+
+## D-079 — Income is not an input to the lead score, though PLAN-02 §P15 lists it as one
+
+**PLAN-02 P15.** The plan's signal table includes "Income band — `undisclosed` is neutral,
+never negative". Building it that way makes two of the plan's own rules contradict each other:
+
+- **§0.5 / gate 15.3:** every tier traces to named signals whose contributions **sum to the
+  score**. Nothing hidden, or the "why this tier" panel is a selection rather than an
+  explanation, and a dealer who cannot reconcile it stops trusting the tier.
+- **§P15's privacy rule / gate 15.7:** the band is "an input to the score, **not an output on
+  the screen**" — never shown to a seller, in any tier.
+
+Every way of keeping both is invertible:
+
+| Attempt | How it leaks |
+|---|---|
+| Show every signal, including income | The band's contribution is on screen |
+| Hide one row, show the total | The seller subtracts and recovers it |
+| Blend income into a broader "affordability" signal | The console already shows the buyer's stated budget and the car's price, so a dealer who reads this open-source scorer computes the budget-fit term and subtracts it |
+
+So income leaves the score. Three reasons, in the order they decided it:
+
+1. **The tier answers *how soon*, not *how much*.** Urgency is target date, cart-add,
+   checkout-opened, booking-submitted — all still there. Income measures capacity, and
+   folding capacity into urgency makes the tier partly a wealth score. That is the version of
+   this feature that gets thrown out of a compliance review, which is the plan's own standard
+   for the dashboard that dumps every visitor's phone number.
+2. **It is the strongest reading of §0.3's rule** ("precision at capture, minimum viable
+   granularity at every boundary after it"). The seller-facing boundary now carries no
+   income-derived quantity at all, rather than one that is merely hard to invert.
+3. **It makes gate 15.9 checkable and stronger.** Not "no hidden penalty for `undisclosed`"
+   — which requires trusting a weight — but *income cannot reach or move a lead score*:
+   `score_lead` has no such parameter, raises `TypeError` if given one, and three buyers
+   differing only in income score identically end to end. There is nothing left to reason
+   about.
+
+`budget_fit` stays and is a different thing: what the buyer **told the interview** they wanted
+to spend, against this car's price. Stated rather than inferred, and already visible to the
+seller in the requirement summary — so it discloses nothing the lead does not already carry.
+
+**What this costs:** a genuine signal. A buyer with the means to complete is, all else equal,
+a better lead. `[SCALE]` could recover it behind a boundary this codebase does not have yet —
+a scorer the seller cannot read, or a tier computed where the explanation is not also served.
+Neither exists, and inventing one to keep a fourth-order signal would be the wrong trade.
+
+---
+
+## D-080 — A seller claims their dealership at signup; P13's `SellerProfile.dealer_id` was never populated
+
+**PLAN-02 P13/P15.** P13's scope listed "`SellerProfile.dealer_id` populated; a seller account
+owns exactly one dealer's listings", and P13 shipped without it — its gate 13.6 became a
+statement about directory coverage instead, so nothing ever set the field and every seller
+account carried `dealer_id=None`. P15's whole premise is routing a lead to a dealership, so
+this had to be resolved before a single lead could exist.
+
+The options were: derive it (from an email domain, or deterministically from the account id),
+provision it out of band, or let the seller state it. **The seller states it**, from a picker
+on the login form backed by `GET /seller/dealers`.
+
+- Deriving it would be a fiction — there is no relationship between a demo email address and a
+  generated dealership, and a "random but stable" assignment is the kind of magic that makes a
+  demo impossible to reason about when it misbehaves.
+- Provisioning is the real answer and is `[SCALE]`: in production a marketplace creates dealer
+  staff accounts, and this is exactly the seam that replaces.
+
+The claim is **validated but not authorised**. `_validate_dealer_claim` rejects an unknown
+dealer id with a 422, because a typo would otherwise produce an account whose console is
+permanently and silently empty — the worst way to learn about a mistake. It does *not* check
+that the claimant works there: with demo auth (§0.2) anyone can claim anything, and a check
+that cannot enforce anything is security theatre, which §0.2 rules out by name.
+
+A seller with no dealership gets a **409 with a sentence**, not an empty list. "You have no
+leads" and "your account was never linked to a dealership" are different problems, and
+answering the second with the first costs somebody an afternoon.
+
+---
+
+## D-081 — `/seller/events` pushes a nudge, not a lead
+
+**PLAN-02 P15 §0.4.** The SSE frame is `{kind: "lead", new: bool, lead_id}`, and the console
+refetches `/seller/leads` when one lands. Sending the lead itself would be one fewer
+round-trip and was the first draft.
+
+It was the wrong draft for one reason: it would make the SSE channel a **second place buyer
+contact details get serialised**. `src/api/leads.py`'s `lead_payload` is deliberately built
+field by field so nobody can accidentally widen it (D-026's reasoning for `ScoreBreakdown`,
+applied where the mistake means a dealer sees a stranger's salary band). A second serialiser
+would have to agree with it forever, and gate 15.7's scan would have to know to check both.
+
+One code path decides what a seller may see. The stream only says *that* something changed.
+
+---
+
+## D-082 — Voice tiers are selected per call, and a fallback is a 204 rather than an error
+
+**PLAN-02 P16.** Two decisions that look like implementation detail and are actually the whole
+feature.
+
+**Per call, not per session.** Caching "we have a provider" at startup is the obvious
+implementation. It is wrong: an ElevenLabs quota that empties mid-demo would leave the session
+serving a dead button until someone refreshed. `VoiceCascade` asks on every utterance, so the
+sequence `provider -> browser -> provider` is a normal thing that happens (gate 16.4 asserts
+exactly that sequence against a synthesiser rigged to fail only its second call).
+
+**A fallback answers 204, not 4xx/5xx.** `POST /voice/speak` returning "tier 1 could not serve
+this" is an *ordinary outcome the client already knows how to handle*, not a failure. Had it
+been a 502, every working degradation would appear in logs and dashboards as an error, and the
+first instinct on seeing that would be to "fix" the fallback. The tier is echoed in
+`X-Voice-Tier` and recorded as a `voice.tier` span attribute so the quiet path stays visible
+without being alarming.
+
+**Rejected:** raising from the cascade and catching in the route. Same behaviour, but it makes
+the *normal* path an exception path, and exception paths accumulate handlers that swallow real
+errors alongside expected ones.
+
+---
+
+## D-083 — Gate 16 proves the cascade with stub providers, never a live key
+
+**PLAN-02 P16.** Every criterion runs with `ELEVENLABS_API_KEY`/`GROQ_API_KEY`/`OPENAI_API_KEY`
+scrubbed, then injects a stub `SpeechSynthesizer`/`SpeechTranscriber` where tier 1 needs
+proving. This is a deliberate limit on what the gate claims: it asserts **tier selection and
+degradation**, not that ElevenLabs is reachable.
+
+The alternative — a criterion that calls the real API — could only pass on a machine with a
+funded account, which makes it useless as a gate and actively misleading in `make verify`. The
+same reasoning D-015 applied to keeping phase gates off live model credentials.
+
+The honest consequence, recorded rather than hidden: **nobody has heard tier 1 speak yet.** The
+provider code is real, typed and unit-tested against its error contracts, but a live rehearsal
+is still outstanding and should happen before the demo video is recorded.
+
+---
+
+## D-084 — Voice never sends a turn; the transcript stops in the composer
+
+**PLAN-02 P16.** `useVoice` hands a transcript to its caller, `App.tsx` puts it in the
+composer's `draft`, and the user presses send exactly as they would after typing. There is no
+code path from the microphone to `postMessage` — gate 16.7 asserts that structurally by
+scanning `web/src/voice/api.ts` for the symbol, not just behaviourally by counting turns.
+
+A mis-heard "no" that silently becomes a chat message is a much worse failure than one the user
+gets to correct, and the difference between the two is one convenience feature nobody would
+have argued against in review. Making it structural is what stops it being added later by
+someone who does not know why it is absent.
+
+
+---
+
+## D-085 - Login comes first; `/` is guarded, reversing D-069
+
+**Product owner decision, taken over my recommendation.** D-069 left `/` open so the agent
+would talk to anyone, on the grounds that demanding a signup before the agent has said a word
+costs demo warmth and would turn three gates red. The owner asked twice for login first. I
+raised the concern once, it was reaffirmed, and this is the result.
+
+Two things make the guarded version genuinely better, not merely accepted:
+
+- **Every downstream surface already needs identity.** The cart is account-scoped, checkout
+  needs a name and a phone, and P15 routes leads to a real person. Collecting it at the door
+  means the buyer is never interrupted mid-flow to provide it.
+- **It makes the marketplace symmetric.** A seller has always had to sign in to reach their
+  console. A buyer dropping straight into a chat made the product read as two apps.
+
+The gate cost was real and is paid rather than dodged: `web/tests/helpers/signin.ts` is one
+shared helper, and every spec that used to open `/` anonymously now signs in first, because
+that is what a user does. Gates 6, 7, 8, 11.3, 12, 14, 15 and 16 are green with the guard on.
+
+Two details worth keeping:
+
+- `RequireRole` stashes the attempted path, so the guard is a **detour, not a reset** -- a link
+  to `/cart` still lands on `/cart` after signing in.
+- The helper mints a **unique email per run**. Accounts persist and the profile is written once
+  at signup, so a shared address carries whichever profile the first run created -- and a spec
+  that only passes on a fresh database fails on the second run for a reason nobody can see.
+
+---
+
+## D-086 - The app shell is `height: 100%`, not `100vh`, once a site header exists above it
+
+Two layout bugs found by looking at a screenshot at a real user's viewport (~2000px, dark
+mode) rather than at the 1360px light-mode one the walkthrough captured.
+
+**`.app { height: 100vh }`** was correct when the shell *was* the page. With `SiteHeader` above
+it the page became exactly one header taller than the window: the whole shell scrolled and the
+composer sat jammed against the bottom edge. `height: 100%` with `min-height: 0` lets the flex
+parent hand down the remaining space.
+
+**`grid-template-columns: minmax(340px, 400px) 1fr`** pinned the rail at 400px, so a 2000px
+screen showed a narrow column beside ~1600px of near-empty canvas -- which reads as broken
+rather than spacious. Now `clamp(340px, 26vw, 560px)`, and canvas children take a
+`max-width: 1100px` centred measure so a result card is readable instead of stretched.
+
+The general lesson, recorded because it cost a round trip: **screenshot at the viewport and
+theme the user actually has.** Both bugs were invisible at 1360px in light mode and obvious at
+2000px in dark.
+
+---
+
+## D-087 - Google sign-in verifies the identity; Cardinal still owns the session
+
+Four decisions, each of which had an easier wrong answer.
+
+**No hosted auth service.** The shortcut is Supabase/Auth0 and one SDK call. P12 already owns
+`Account`, `AuthToken` and the `accounts` table, and every downstream feature -- the cart,
+checkout's payee disclosure, P15's lead routing -- keys off `account.id`. A hosted provider
+would be a *second* source of truth for who someone is, and the two would drift the first time
+only one of them was updated. Google answers "who is this"; Cardinal still issues the session.
+
+**No JWT library, deliberately.** Google returns an `id_token` (a signed JWT) and verifying it
+properly means a JWT dependency, which gate 12.3 bans outright. So the access token goes to
+Google's own `userinfo` endpoint instead: one HTTPS call to the authority that already knows
+the answer. It costs a round trip and removes the entire "we verified the signature wrong"
+class of bug -- the best kind of trade for a build nobody will security-audit before the demo.
+
+**The role rides in the httpOnly cookie, never the query string.** `state|role` in one cookie.
+Putting the role in the callback URL would let anyone turn a buyer sign-in into a seller one by
+editing an address bar, and the seller console is the side with other people's leads on it.
+`test_the_role_comes_from_the_cookie_not_the_query_string` is that attack, written down.
+
+**`BuyerProfile.city` and `.country` became `str | None`.** This is the one that started as a
+bug: the callback passed `{"city": "", "country": "DE"}`, and `city` had `min_length=1`, so
+every Google buyer sign-in raised a `ValidationError` -- a 500 on the happy path, found by the
+new tests rather than by a judge. The obvious repair is to keep inventing a default. The
+better one is to admit the field is unknown: Google's `email`/`profile` scopes carry no
+address and no further scope would supply one. `None` means *not stated*; `min_length` stays,
+so `""` is still refused and the signup form (where both are `required`) cannot quietly write
+a blank. A profile that says it does not know beats one that says "Berlin" because a
+programmer needed the model to validate. It cost no migration -- profiles live in
+`account_profiles.canonical` as JSONB, which is exactly the flexibility D-006 bought.
+
+The seller side of the same gap could not be solved that way: a seller with no dealership has a
+console that can never fill (D-080), so Google sellers land on `/login?claim=dealership` and
+`POST /auth/claim-dealership` fills it once. `LoginRoute` normally bounces a signed-in visitor
+off `/login`; this is its one exception, and it checks *both* that the URL asks for the claim
+and that the account actually needs it, so a stale link never renders a picker the API would
+refuse.
+
+---
+
+## D-088 — `/` is the public showroom; the agent moved to `/chat`
+
+**Front page.** D-069 left `/` open so the agent would talk to anyone; D-085 reversed it and
+guarded `/`, so the first thing a stranger saw was a login form. Both were arguing about the
+same route because there was only one.
+
+There are two questions and they have different answers. *What must a visitor prove before the
+product spends money on their behalf?* — identity, unchanged, and `/chat` and `/cart` are both
+still `RequireRole`-guarded exactly as `/` was. *What should a stranger see first?* — not a form.
+A product whose whole pitch is "recommendations it can defend" has to make that pitch before it
+asks for an email address, and D-085's version made the pitch after.
+
+So the guard did not weaken; it moved one hop in, from the door of the building to the door of
+the room where something is actually spent. `/` is a showroom that makes no agent call, holds no
+session and reads exactly one thing from the API (`/health`, for a listing count that degrades
+to the seeded figure when nothing is running).
+
+**The cost was paid, not dodged.** Eight specs asserted `/` was the chat. All were updated,
+`signInAsBuyer` now lands on `/chat`, and gates 6/7/8/11/12/13/14/15/16 were re-run green rather
+than reasoned about.
+
+**Two bugs fell out of the move, both pre-existing.**
+
+`LoginPage` never read the `from` state that `RequireRole` stashes, so "signing in returns you to
+where you were headed" returned you to `/` regardless. It went unnoticed because `/` *was* the
+buyer app, so the wrong answer looked like the right one; the spec asserted a control the cart
+and the chat both have rather than the URL. With `/` a marketing page the bug became visible.
+
+Fixing it exposed the second: `LoginPage.onVerify` navigates after `refresh()`, but `refresh()`
+flips the session to authenticated, which re-renders `LoginRoute`, which redirects an
+already-signed-in visitor away from the form. Which of the two lands is microtask ordering, and
+`LoginRoute` was winning. Rather than try to win the race, both now compute the destination from
+the same `location` via `web/src/auth/destination.ts`, so whichever runs is right. The stashed
+path is accepted only if it is a same-origin absolute path and not `/login` itself — routing
+state that can point anywhere is an open redirect, and one that can point at the form is a loop.
+
+## D-089 — Cohere's values through shadcn/ui's names, in plain CSS
+
+**Design system.** The brief was a Cohere-styled site with a configurator front page, leaning on
+shadcn/ui. Taking shadcn literally means Tailwind, `class-variance-authority`, `tailwind-merge`
+and `radix-ui` — a build-tooling migration across 1,700 lines of working CSS, for a hackathon,
+to obtain components this app has four of.
+
+What is actually worth having from shadcn is not its CSS. It is (a) the semantic token names —
+`--background`, `--foreground`, `--card`, `--primary`, `--muted`, `--border`, `--ring`; (b) the
+component *anatomy*, especially the seven-part Card and the `data-slot` / `data-variant`
+attributes v4 emits precisely so consumers can style off them; and (c) the accessibility work in
+the primitives. All three port to plain CSS. So `web/src/ui/` is shadcn's API with Cohere's
+values in it: `Button`, `Card`, `Badge`, `Input`/`Field`, `Separator`, `Tabs`, a 15-line `cn`,
+and a `Slot` narrow enough to state its contract (one element child). No new dependency.
+
+**`tokens.css` is the whole trick.** `styles.css` already read everything through six variables
+(`--bg`, `--text`, `--line`, `--accent`, …). Re-pointing those six at Cohere's palette restyled
+the entire product — chat rail, canvas, cart, seller console, voice — in one edit rather than a
+thousand. The only casualties were two dozen hardcoded `rgb(74 222 155 / …)` glows tuned for a
+dark background, now `color-mix` against `--accent` so they follow the palette instead of
+fighting it. `styles.css` no longer contains a raw hex, and a second `:root` there would silently
+beat the token layer.
+
+**Light only.** Cohere's canvas *is* white; a `prefers-color-scheme: dark` branch would hand half
+the audience a page the design system does not describe.
+
+**The hero photograph is edited, and the edit is the point.** A studio render's "white"
+background is a soft grey gradient, which over a white page reads as a rectangle around the car
+no matter what blend mode is used. Masking the edges cannot work on a tightly-cropped frame
+without eating the car's own nose and tail. So the asset ships levelled to true white and cropped
+to the car (`3840x1640`, from a 16:9 original that spent 39% of its height on empty studio
+floor), and `mix-blend-mode: multiply` does the rest — white multiplied by the page is the page.
+That also lets the paint-swatch wash read *through* the backdrop, which is what makes choosing a
+colour feel like it lit the studio.
+
+**What the front page will not do.** No invented specification: every figure is BMW's published
+number for the car in the photograph, and the ⓘ control says so. No fake liveness: the one live
+number is `/health`'s catalogue count, and when the API is down the page shows the seeded figure
+rather than a spinner that never resolves. No paint lie: a swatch tints the stage, and the
+caption keeps naming the colour the photograph actually shows. A front page for a product that
+claims it can defend its recommendations cannot open by making things up.
+
+---
+
+## D-090 — Paddock Green replaces the Cohere white canvas
+
+**Design system.** D-089 shipped Cohere's white editorial canvas. The product owner then produced
+a full design handoff for a dark, photographic treatment — "Paddock Green" — and asked for it.
+This records what changed and, more usefully, what did not.
+
+**The token layer earned itself twice.** D-089's argument for putting every colour behind
+`ui/tokens.css` was that a restyle should be one edit rather than a thousand. That was a claim
+until now; this is the test. Re-pointing the shadcn semantic tokens and the six legacy-bridge
+aliases at the paddock palette turned the chat rail, the A2UI canvas, the MCP App host, the cart,
+the seller console and the voice controls dark **without touching their layout**. The handoff
+asked for exactly that and named the file; it was right to.
+
+Four things the swap could not reach, all for the same reason — they encoded an assumption about
+the *ground*, not a colour:
+
+- **The ambient mesh.** Cohere's pale-green and pale-blue washes over near-black read as a grey
+  smear across the entire canvas. Same mechanism (`--mood` still hue-rotates per phase), one
+  tenth the amplitude, mint and teal instead of the pale washes.
+- **Shadows.** Ink-on-white at 5% alpha is invisible on a dark ground. Depth here is real black
+  at 30–60%, or it is not depth.
+- **`--danger` is now the coral**, and `.tier-high` was painted with it — so the tier a seller
+  most wants was rendering as an alarm. High is the mint accent; only overdue is warm. One warm
+  colour in the system, reused everywhere, is the rule that keeps a palette from drifting.
+- **The demo-auth banner.** It was a 12%-alpha tint with coloured text. On this ground that is
+  precisely how the one element that must be read before anything else stops being read. It is
+  now a flat, opaque coral strip with dark text — the highest-contrast pairing available.
+
+**What the hero lost, deliberately.** The facet rail, the labelled hotspots on the car and the
+paint swatches are gone. They belonged to a configurator treatment of a *studio cutout*; this
+hero is a whole car in an environment, and pinning labelled dots onto a rain-covered bonnet at
+dusk would be illegible as well as off-message. `PAINTS`, `FACETS` and the `Hotspot` type went
+with the UI that read them rather than being left behind as data nothing renders.
+
+**The honesty affordance stayed, and had to grow.** The previous hero could claim every figure
+was a manufacturer number. This one presents a *listing*: an asking price, a monthly, a mileage
+and a named seller, none of which a showcase can source, because it has no catalogue row. Rather
+than drop the ⓘ control as decoration, it now says exactly that — performance figures are BMW's
+published numbers, the listing figures are illustrative. A front page for a product whose whole
+pitch is defensible recommendations cannot open by quoting a price it cannot source, and the fix
+is a sentence rather than a smaller design.
+
+**Two things found while re-theming, neither cosmetic.**
+
+`SignalRow` hardcoded a `+` in front of every contribution. Every signal the scorer defines
+carries a non-negative weight, so it was correct — but only by coincidence, and a signal that
+ever subtracted would have rendered `+-0.066`. The sign is now derived, and `data-sign` lets the
+bar turn coral for the same case without the stylesheet guessing.
+
+The empty canvas showed three shimmering placeholder bars — a loading state that never loads.
+They are replaced by a phase row and a label strip derived from the `phase` the SSE stream
+already reports, so the idle canvas now says where the agent actually is. One segment per phase,
+not the handoff's literal "three": three bars above four labels would correspond to nothing.
+
+**Not done, and not silently.** The handoff lists a per-line photo thumbnail on the cart as
+optional. It is not built: cart lines have no photograph in the data model, the results card
+already carries a "Representative model — not this specific vehicle" disclaimer for exactly this
+reason, and putting a picture of a car that is not the car next to a payee disclosure would
+undercut the most carefully honest surface in the product.
+
+---
+
+## D-092 — Three ways a working turn still felt broken
+
+All three were reported together, from one session, and none of them was a backend fault. They
+share a shape worth naming: **the machinery worked and the experience did not**, so no test
+caught them.
+
+**Replies talked over each other.** `App` speaks each `agent_text` as it lands, which is right.
+The bug was one line deep: `await audio.play()` resolves when playback *begins*, not when it
+ends, so a two-message turn started the second voice a few milliseconds into the first. Two
+changes, and both are needed — `speak()` now resolves on `ended`, and `speakReply` chains each
+utterance onto the tail of the previous promise. Sequencing was impossible without the first
+fix, which is why the obvious "add a queue" alone would not have worked. Browser-tier speech
+resolves on `onend` for the same reason, and `stopSpeaking()` cuts the current utterance off
+when the toggle goes off, rather than only silencing what had not started yet.
+
+**The composer went dead exactly when it was most wanted.** The input was
+`disabled={sending || …}`, so for the whole turn — including the long search — there was
+nowhere to type. That is the moment someone remembers the constraint they forgot to mention.
+Now only *submitting* is held back: `send`'s own guard still refuses an overlapping turn, so
+nothing was loosened except the ability to compose while waiting.
+
+**"The older chats disappeared."** They never did — every write to `chatMessages` is an
+append, and there is no path that clears it. The pane scrolled to the bottom on *every*
+message and every `sending` flip, unconditionally, so scrolling up to re-read an answer was
+undone within a second by the next status event. Following now happens only when the view is
+already within 120px of the bottom. The general lesson: an auto-scroll that ignores where the
+user put the viewport is indistinguishable from data loss, and gets reported as data loss.
+
+---
+
+## D-091 — Every on-screen mock/demo disclosure banner removed from the running UI
+
+**Product ask, confirmed after the cost was stated.** Four elements: the coral `DEMO AUTH — ANY
+CODE BELOW WORKS` strip on `/login`, the visible `Use any of: 123456 · 234567 · 345678` helper
+text on the code step, the front-page announcement bar ("Cardinal is a demo build…"), and
+`MOCK — NO REAL PAYMENT` above the card fields in checkout. The first three were a straight
+removal. The fourth is the one CONSTITUTION I.5 named explicitly and gate 8.10 asserted
+literally — offered as a separate choice, with the consequence spelled out (gate 8.10 red,
+constitution overridden, a payment-shaped form with nothing on screen saying it isn't one), and
+picked anyway. That is recorded here rather than quietly done.
+
+**What stayed honest, because the removal is cosmetic, not structural.** The underlying facts
+did not change:
+
+- `POST /auth/request-otp` still returns `DEMO_AUTH_BANNER` and the plaintext `demo_codes` list
+  in its JSON body (gate 12.10, untouched) — a programmatic client or a future maintainer reading
+  the API still gets the truth. What changed is that `LoginPage` stopped rendering either.
+- `ui://checkout/payment`'s own MCP resource description still reads *"Priced total, optional
+  financing, mock card payment. MOCK -- NO REAL PAYMENT."* (`src/mcp/booking/resources.py`) —
+  anyone inspecting the tool before opening the form still sees it.
+- README.md and this file still state plainly, in prose, that the payment gateway is mock and
+  the OTP codes are dummy.
+- `MockPaymentGateway` is still the only path a transaction can take; nothing about what the
+  checkout form *does* changed, only what it *says* on screen.
+
+**CONSTITUTION I.5 revised, not silently bypassed.** Its text now records the override and why
+gates 8.10/12.2 changed shape rather than simply going red and being ignored — a constitution
+clause that gates quietly stop enforcing is worse than one that is honestly rewritten.
+
+**Fixed in passing: native `<select>` popups were unreadable.** Three separate places
+(`.login-form select`, the shared `.ui-select`, `.voice-picker`) set `color` on the closed
+`<select>` to white for the dark theme, but a `<select>`'s *popup* list is a surface the browser
+paints itself — Chromium and Firefox use the OS's own opaque white for it unless `option` is
+styled directly, and `color` on the `<select>` does not reach that surface. The closed box looked
+fine; every unselected row in the open list was white text on white, invisible except for
+whichever option the browser's own hover/selection highlight was covering. Reported by the
+product owner from a live screenshot. Fixed by styling `option` with an explicit solid
+`background-color` and `color` at all three call sites — solid, not the input's translucent
+fill, because gradient/opacity `option` styling is unreliable across browsers and invisible text
+is not something to gamble on twice.

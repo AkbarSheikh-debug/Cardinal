@@ -24,6 +24,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -74,11 +75,23 @@ class ListingRow(Base):
     #: Soft delete, so a booking that references a pulled listing still resolves.
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    #: PLAN-02 P13. Nullable at the column level so the migration lands on an already-seeded
+    #: database without a destructive rewrite; the re-seed fills it, and gate 13.1 asserts
+    #: zero orphans in a freshly generated catalogue rather than trusting the constraint.
+    dealer_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("dealers.id"), index=True
+    )
+
     brand: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(64), nullable=False)
     variant: Mapped[str] = mapped_column(String(64), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     category: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: PLAN-02 P13 / proposal doc #2. Server default `used`, matching `Listing.condition`'s
+    #: own default -- the safe direction for rows that predate this column.
+    condition: Mapped[str] = mapped_column(
+        String(24), nullable=False, server_default="used", index=True
+    )
     offer_type: Mapped[str] = mapped_column(String(16), nullable=False)
 
     market_value_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -108,6 +121,32 @@ class ListingRow(Base):
     #: The untouched upstream payload (CONSTITUTION II.6 / PHASE-0 §4).
     raw: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     #: The full normalised `Listing`, and the only thing `to_listing` reads.
+    canonical: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class DealerRow(Base):
+    """PLAN-02 P13. The business behind a listing.
+
+    `canonical` carries the whole `Dealer` (D-006's dual-storage shape, same as `listings`);
+    the projected columns are the ones a query filters on -- `source`/`city` for the
+    directory view, `verification_status` because P14's checkout has to be able to find
+    unverified payees without deserialising every row.
+    """
+
+    __tablename__ = "dealers"
+    __table_args__ = (
+        UniqueConstraint("source", "dealer_ref", name="uq_dealers_source_ref"),
+        Index("ix_dealers_source_city", "source", "city"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    dealer_ref: Mapped[str] = mapped_column(String(32), nullable=False)
+    legal_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    city: Mapped[str] = mapped_column(String(64), nullable=False)
+    country: Mapped[str] = mapped_column(String(2), nullable=False)
+    verification_status: Mapped[str] = mapped_column(String(16), nullable=False)
     canonical: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
 
@@ -171,6 +210,112 @@ class MemoryRow(Base):
     superseded_by: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True))
 
 
+class AccountRow(Base):
+    """PLAN-02 P12. Identity is `(email, role)`, not `email` -- one person may hold a buyer
+    account and a seller account on one address, and the constraint below is what makes that
+    a supported case rather than a collision (`src/adapters/identity_store.py`'s docstring).
+    """
+
+    __tablename__ = "accounts"
+    __table_args__ = (
+        UniqueConstraint("email", "role", name="uq_accounts_email_role"),
+        Index("ix_accounts_role", "role"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    email: Mapped[str] = mapped_column(String(254), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AccountProfileRow(Base):
+    """The role-specific half, stored as one `canonical` document -- the same dual-storage
+    shape D-006 gave `listings` and D-014 gave `sessions.profile`.
+
+    Whole-document rather than projected columns because nothing queries *into* a profile:
+    the API reads it by `account_id` and hands it back. `annual_income` living inside JSONB
+    also means it has exactly one home to redact from, rather than a column that a future
+    `SELECT *` in a log line could surface (PLAN-02 §0.3).
+    """
+
+    __tablename__ = "account_profiles"
+
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    canonical: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class AuthTokenRow(Base):
+    """An opaque bearer token. No JWT, no signature, no secret (PLAN-02 §0.2) -- the token
+    *is* the lookup key, so there is nothing to forge offline and nothing to leak from the
+    repository.
+    """
+
+    __tablename__ = "auth_tokens"
+    __table_args__ = (Index("ix_auth_tokens_account", "account_id"),)
+
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CartItemRow(Base):
+    """PLAN-02 P14. One row per car in one account's shortlist.
+
+    `UNIQUE (account_id, source, source_id, offer_type)` is the database-level half of
+    `Cart.with_item`'s idempotency: every listing is one physical vehicle, so a cart holding
+    two of the same one is describing something that does not exist. Application logic can be
+    raced; this constraint cannot -- the same backstop posture `bookings.idempotency_key`
+    takes for double-submitted checkouts.
+    """
+
+    __tablename__ = "cart_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id", "source", "source_id", "offer_type", name="uq_cart_items_natural"
+        ),
+        Index("ix_cart_items_account", "account_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    #: No ON DELETE CASCADE: a withdrawn listing is soft-deleted, so this always resolves --
+    #: and a cart item whose car was pulled should show as unavailable at checkout (gate
+    #: 14.10), not vanish silently between one page load and the next.
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("listings.id"), nullable=False
+    )
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    offer_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class OtpChallengeRow(Base):
+    """A started login. Persisted rather than held in-process so `request-otp` and
+    `verify-otp` landing on two different workers still describe one flow -- the failure
+    mode an in-memory challenge store hides on a single-worker dev machine and exposes the
+    moment the API scales past one.
+    """
+
+    __tablename__ = "otp_challenges"
+
+    email: Mapped[str] = mapped_column(String(254), primary_key=True)
+    role: Mapped[str] = mapped_column(String(16), primary_key=True)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class BookingRow(Base):
     """PHASE-8 §3/§6. `state`/`idempotency_key`/`listing_id`/`session_id` are projected
     columns -- what the idempotency lookup and the TTL sweep query filter on -- and
@@ -199,6 +344,50 @@ class BookingRow(Base):
     idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
     #: The full `Booking.model_dump(mode="json")`, audit trail included -- `canonical` is the
     #: only thing a `Booking` is ever rebuilt from (mirrors `ListingRow.canonical`).
+    canonical: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class LeadRow(Base):
+    """PLAN-02 P15. One row per (buyer, car) engagement, routed to the dealer who owns it.
+
+    `id` is `lead_uuid(buyer_account_id, listing_id)` -- deterministic, so "one lead per buyer
+    per car" (gate 15.1) is a property of the primary key rather than of an upsert somebody
+    has to keep correct. A `UNIQUE` on the pair would say the same thing twice.
+
+    `dealer_id` is indexed because it is the *only* way leads are ever read: every query is
+    scoped to one dealer (`LeadStore`'s own note, CONSTITUTION IV.4), so an unindexed scan
+    here would be a table scan on the hottest seller-facing path.
+
+    `tier`/`score`/`state` are projected columns -- what the console sorts and filters on --
+    and `canonical` is the full `Lead`, score breakdown included, the same dual-storage shape
+    D-006 established for `listings`. The breakdown has to survive a restart intact: a "why
+    this tier" panel that recomputed from today's clock would show a dealer different
+    reasoning than the lead was actually scored with.
+    """
+
+    __tablename__ = "leads"
+    __table_args__ = (
+        Index("ix_leads_dealer", "dealer_id"),
+        Index("ix_leads_dealer_state", "dealer_id", "state"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    buyer_account_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    #: RESTRICT, not CASCADE: deleting a dealer must not silently delete the leads that prove
+    #: what their inventory attracted (the same posture `listings.dealer_id` takes, D-075).
+    dealer_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("dealers.id"), nullable=False
+    )
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("listings.id"), nullable=False
+    )
+    tier: Mapped[str] = mapped_column(String(16), nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
     canonical: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

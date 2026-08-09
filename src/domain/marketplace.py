@@ -18,7 +18,14 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.domain.dates import DateRange
-from src.domain.enums import FuelType, MarketplaceKind, OfferType, Transmission, VehicleCategory
+from src.domain.enums import (
+    FuelType,
+    MarketplaceKind,
+    OfferType,
+    Transmission,
+    VehicleCategory,
+    VehicleCondition,
+)
 from src.domain.listing import ListingSummary
 from src.domain.money import Money
 
@@ -65,6 +72,9 @@ class SearchQuery(BaseModel):
     brands: tuple[str, ...] = ()
     fuel_types: tuple[FuelType, ...] = ()
     transmissions: tuple[Transmission, ...] = ()
+    #: PLAN-02 P13 / proposal doc #2. A first-class filter beside `offer_type`, not folded
+    #: into it: "buy or rent" and "new or used" are orthogonal questions.
+    conditions: tuple[VehicleCondition, ...] = ()
     offer_type: OfferType | None = None
     max_price: Money | None = Field(default=None, description="Against price_buy.")
     max_rental_daily: Money | None = None

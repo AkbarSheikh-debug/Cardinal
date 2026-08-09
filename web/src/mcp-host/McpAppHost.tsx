@@ -98,7 +98,16 @@ export function McpAppHost(props: McpAppHostProps): React.ReactElement {
   }
 
   return (
-    <div className="cardinal-mcp-app-host" data-testid="mcp-app-host" data-ready={ready}>
+    // `data-resource-uri` so a test can assert *which* App is mounted from the DOM rather
+    // than from config -- gate 14.2's requirement that `/cart` mounts the same
+    // `ui://checkout/payment` resource the in-chat flow does, checked at the only place
+    // where "the same" can actually be observed.
+    <div
+      className="cardinal-mcp-app-host"
+      data-testid="mcp-app-host"
+      data-ready={ready}
+      data-resource-uri={resourceUri}
+    >
       <div className="cardinal-mcp-app-host-bar">
         <span>{toolName === "open_checkout" ? "Checkout" : "Booking form"}</span>
         <button type="button" onClick={onClose} aria-label="Close">

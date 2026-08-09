@@ -17,6 +17,7 @@
  * mistaken for this run's own backend).
  */
 import { test, expect, type Page, type Frame, type Locator } from "@playwright/test";
+import { signInAsBuyer } from "./helpers/signin";
 
 // No `@types/node` dependency in this project (commerce.spec.ts's own note) -- resolved
 // relative to `web/` (this suite's cwd, `scripts/gate_phase11.py` runs `npx playwright test`
@@ -63,7 +64,10 @@ test.describe.configure({ mode: "serial" });
 test("11.3/11.4 walks all seven demo beats end to end, screenshotting each", async ({ page }) => {
   const session = `demo-e2e-${Date.now()}`;
 
-  await page.goto(`/?session=${encodeURIComponent(session)}`);
+  // `/` is guarded (D-085), so the demo starts where a real visitor starts: at the sign-in
+  // screen. Works with the environment scrubbed to `DEMO_MODE=true` -- the in-memory account
+  // store needs no database and the demo OTP codes are constants (gate 11.4).
+  await signInAsBuyer(page, { session });
 
   // D-056/D-057: the model-selection redesign removed the "Start Demo" button from the live
   // product UI (the user's own call -- one real path, not a demo path plus a live path). The
@@ -138,9 +142,9 @@ test("11.3/11.4 walks all seven demo beats end to end, screenshotting each", asy
   // -- Beat 7: mock checkout -- opened only after the real submit above, priced fresh --------
   const checkoutFrame = await waitForBlobFrameWithSelector(page, "#pay-button");
   await checkoutFrame.locator("#form-root").waitFor({ state: "visible", timeout: 10_000 });
-  const banner = checkoutFrame.locator("#mock-banner");
-  await expect(banner).toBeVisible();
-  await expect(banner).toContainText("MOCK");
+  // The on-screen "MOCK -- NO REAL PAYMENT" banner this beat used to assert was removed from
+  // every route (D-091). The checkout that follows is still the mock path -- `#pay-button`
+  // never reaches a real processor -- it just no longer announces that on screen.
   await shot(page, "beat-7-checkout-opened", host);
 
   // The other must-land moment: the agent cannot press Confirm. Everything up to and including

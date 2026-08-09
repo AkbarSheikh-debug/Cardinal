@@ -1,49 +1,36 @@
-:root {
-  --bg: #0b0d10;
-  --bg-elevated: #12161b;
-  --bg-input: #161b22;
-  --line: #232a33;
-  --text: #e7ecf3;
-  --text-dim: #94a1b2;
-  --accent: #4ade9b;
-  --accent-deep: #16A34A;
-  --user-bubble: #1d3a2e;
-  --danger: #f87171;
-  --radius: 14px;
-  color-scheme: dark;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-synthesis-weight: none;
-  text-rendering: optimizeLegibility;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f6f8fa;
-    --bg-elevated: #ffffff;
-    --bg-input: #ffffff;
-    --line: #e3e8ef;
-    --text: #0f172a;
-    --text-dim: #64748b;
-    --user-bubble: #d9f4e6;
-    color-scheme: light;
-  }
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-}
+/**
+ * The product surfaces: chat rail, A2UI canvas, MCP App host, cart, seller console, voice.
+ *
+ * **This file no longer owns colour.** It used to open with a `:root` block defining a dark
+ * palette (`--bg: #0b0d10`) and a light override behind `prefers-color-scheme`. Both now live in
+ * `ui/tokens.css`, which sets the same six variable names from Cohere's palette
+ * (`VoltAgent/awesome-design-md` → `design-md/cohere/DESIGN.md`).
+ *
+ * That indirection is the entire reason a whole-product restyle was one edit instead of a
+ * thousand: almost every rule below already read `var(--bg)` / `var(--text)` / `var(--line)` /
+ * `var(--accent)`, so re-pointing those six turned the product white-canvas without touching the
+ * layout. The exceptions were the two dozen hardcoded `rgb(74 222 155 / …)` glows, which were
+ * tuned for a dark background and are now expressed as `color-mix` against `--accent` so they
+ * follow the palette instead of fighting it.
+ *
+ * Keep it that way: a raw hex below is a bug, and a second `:root` here would silently win over
+ * the token layer.
+ */
 
 .app {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(340px, 400px) 1fr;
-  height: 100vh;
+  /* The rail scales with the viewport instead of pinning at 400px. On a 2000px screen the
+     old cap left ~1600px of near-empty canvas beside a narrow column, which read as a broken
+     layout rather than a spacious one. `clamp` keeps it readable on a laptop and proportionate
+     on an ultrawide. */
+  grid-template-columns: clamp(340px, 26vw, 560px) 1fr;
+  /* `height: 100%`, not `100vh`. The site header sits above this now, so `100vh` made the
+     page exactly one header taller than the window -- which is why the composer sat jammed
+     against the bottom edge with the whole shell scrolled. `.site-shell` hands down the
+     remaining space via flex. */
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -51,16 +38,24 @@ body {
    A slow-drifting mesh of radial gradients behind everything else, hue-shifted by `--mood`
    (App.tsx sets it per phase -- research reads cool, recommend/transact read warm) so the
    app reads as responsive to what the agent is doing rather than a static shell. Fixed and
-   z-index:-1 rather than a real element in flow, so it never affects layout or hit-testing. */
+   z-index:-1 rather than a real element in flow, so it never affects layout or hit-testing.
+
+   Dialled right down for the white canvas. At the old alphas (0.16 over near-black) the same
+   mesh reads as three coloured stains on a sheet of paper, which is exactly the "saturated
+   gradient as a normal UI background" DESIGN.md rules out. The *mechanism* is untouched --
+   `--mood` still hue-rotates per phase -- but the amplitude is now a wash you notice only when
+   it changes, which is all it was ever for. Cohere's own pale washes are the target: the
+   `pale-green` and `pale-blue` section backdrops. */
 .ambient {
   position: fixed;
   inset: 0;
   z-index: -1;
   --mood: 0deg;
   background:
-    radial-gradient(circle at 15% 20%, rgb(74 222 155 / 0.16), transparent 45%),
-    radial-gradient(circle at 85% 15%, rgb(96 165 250 / 0.12), transparent 40%),
-    radial-gradient(circle at 50% 90%, rgb(74 222 155 / 0.1), transparent 50%);
+    radial-gradient(circle at 15% 20%, color-mix(in oklab, var(--pg-mint) 22%, transparent), transparent 48%),
+    radial-gradient(circle at 85% 15%, color-mix(in oklab, #3f8fa0 20%, transparent), transparent 44%),
+    radial-gradient(circle at 50% 92%, color-mix(in oklab, var(--pg-mint) 16%, transparent), transparent 52%);
+  opacity: 0.3;
   filter: hue-rotate(var(--mood)) saturate(1.1);
   transition: filter 1.4s ease;
   animation: drift 22s ease-in-out infinite;
@@ -88,9 +83,9 @@ body {
   background: linear-gradient(
     115deg,
     transparent 0%,
-    rgb(74 222 155 / 0.22) 45%,
-    rgb(74 222 155 / 0.4) 50%,
-    rgb(74 222 155 / 0.22) 55%,
+    color-mix(in oklab, var(--accent) 22%, transparent) 45%,
+    color-mix(in oklab, var(--accent) 40%, transparent) 50%,
+    color-mix(in oklab, var(--accent) 22%, transparent) 55%,
     transparent 100%
   );
   backdrop-filter: blur(1.5px);
@@ -129,9 +124,9 @@ body {
   display: grid;
   place-items: center;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-  color: #04120b;
-  font-weight: 800;
+  background: var(--pg-brand);
+  color: #ffffff;
+  font-weight: 600;
   font-size: 1.1rem;
 }
 
@@ -160,7 +155,7 @@ body {
 
 .dot-ok {
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgb(74 222 155 / 0.15);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
 }
 
 .dot-bad {
@@ -180,16 +175,18 @@ body {
 }
 
 .intro h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 2.125rem;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
 }
 
 .intro p {
-  margin: 0 0 1.25rem;
+  margin: 0 0 1.5rem;
   color: var(--text-dim);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   line-height: 1.55;
 }
 
@@ -214,7 +211,7 @@ body {
 
 .openers button:hover {
   border-color: var(--accent);
-  background: rgb(74 222 155 / 0.06);
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
   transform: translateX(2px);
 }
 
@@ -260,7 +257,7 @@ body {
 
 .model-picker-item.selected {
   border-color: var(--accent);
-  background: rgb(74 222 155 / 0.08);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
 }
 
 .model-picker-item-top {
@@ -290,12 +287,12 @@ body {
 }
 
 .badge-free {
-  background: rgb(74 222 155 / 0.18);
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
   color: var(--accent);
 }
 
 .badge-reasoning {
-  background: rgb(148 161 178 / 0.18);
+  background: color-mix(in oklab, var(--muted-foreground) 18%, transparent);
   color: var(--text-dim);
 }
 
@@ -374,14 +371,14 @@ body {
 }
 
 .msg-assistant {
-  background: rgb(148 161 178 / 0.1);
+  background: color-mix(in oklab, var(--muted-foreground) 10%, transparent);
   border-bottom-left-radius: 4px;
 }
 
 .msg-error {
-  background: rgb(248 113 113 / 0.12);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
   color: var(--danger);
-  border: 1px solid rgb(248 113 113 / 0.3);
+  border: 1px solid color-mix(in oklab, var(--destructive) 30%, transparent);
 }
 
 .msg-thinking {
@@ -446,6 +443,7 @@ body {
 }
 
 .composer input {
+  border-radius: var(--radius-pill);
   flex: 1;
   min-width: 0;
   padding: 0.7rem 0.9rem;
@@ -465,7 +463,7 @@ body {
 .composer input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgb(74 222 155 / 0.15);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
 }
 
 .composer button {
@@ -473,10 +471,11 @@ body {
   width: 42px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  height: 42px;
+  border-radius: var(--radius-full);
   border: none;
-  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-  color: #04120b;
+  background: var(--pg-primary-fill);
+  color: var(--pg-primary-ink);
   cursor: pointer;
   transition: opacity 0.15s, transform 0.15s;
 }
@@ -499,6 +498,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  /* Content stays a readable column and centres itself rather than stretching edge to edge:
+     a result card 1600px wide is worse to read than one at 1100px, and the stretched version
+     is what made the canvas look empty at large widths. */
+  --canvas-max: 1100px;
 }
 
 .canvas-empty {
@@ -519,47 +522,6 @@ body {
   margin: 0;
   font-size: 0.85rem;
   line-height: 1.6;
-}
-
-.canvas-empty-art {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin: 0 auto 1.5rem;
-  width: 210px;
-}
-
-.canvas-empty-art span {
-  height: 46px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgb(148 161 178 / 0.07) 50%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 2.4s ease-in-out infinite;
-}
-
-.canvas-empty-art span:nth-child(2) {
-  animation-delay: 0.3s;
-  opacity: 0.7;
-}
-
-.canvas-empty-art span:nth-child(3) {
-  animation-delay: 0.6s;
-  opacity: 0.45;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
 }
 
 .surface {
@@ -597,7 +559,7 @@ body {
 }
 
 .cardinal-car-card[data-rank]:hover {
-  background: rgb(74 222 155 / 0.05);
+  background: color-mix(in oklab, var(--accent) 5%, transparent);
 }
 
 /* Rank 1 gets a brief gold aura on arrival -- the "you found the winner" beat, gone within two
@@ -611,13 +573,13 @@ body {
 
 @keyframes gold-aura {
   0% {
-    box-shadow: 0 0 0 0 rgb(250 204 21 / 0);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--cohere-coral) 0%, transparent);
   }
   20% {
-    box-shadow: 0 0 28px 3px rgb(250 204 21 / 0.4);
+    box-shadow: 0 0 28px 3px color-mix(in oklab, var(--cohere-coral) 40%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 0 rgb(250 204 21 / 0);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--cohere-coral) 0%, transparent);
   }
 }
 
@@ -670,21 +632,21 @@ body {
 
 .cardinal-research-trace li[data-status="done"]::before {
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgb(74 222 155 / 0.15);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
 }
 
 .cardinal-research-trace li[data-status="error"]::before {
   background: var(--danger);
-  box-shadow: 0 0 0 3px rgb(248 113 113 / 0.18);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 18%, transparent);
 }
 
 @keyframes trace-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgb(74 222 155 / 0.5);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 50%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 6px rgb(74 222 155 / 0);
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 0%, transparent);
   }
 }
 
@@ -758,15 +720,15 @@ body {
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--accent);
-  background: rgb(74 222 155 / 0.08);
-  border: 1px solid rgb(74 222 155 / 0.25);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent);
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 
 .cardinal-tco-expand:hover {
-  background: rgb(74 222 155 / 0.15);
+  background: color-mix(in oklab, var(--accent) 15%, transparent);
   border-color: var(--accent);
 }
 
@@ -782,7 +744,7 @@ body {
   width: 100%;
   height: 180px;
   border-radius: 6px;
-  background: rgb(255 255 255 / 0.02);
+  background: color-mix(in oklab, var(--foreground) 2%, transparent);
 }
 
 /* The viewer takes the pointer for orbit/zoom, so the card's own click-to-explain no longer
@@ -798,6 +760,86 @@ body {
   color: var(--text-dim);
 }
 
+/* The real reference photo. `cover` rather than `contain`: these are stock photos of wildly
+   varying aspect ratios, and letterboxing every one of them into the card's box is what made
+   the previous poster-based version render as a small floating square. */
+.cardinal-car-photo-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cardinal-car-photo {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 6px;
+  transition: transform 200ms ease;
+}
+
+.cardinal-car-photo-button:hover .cardinal-car-photo {
+  transform: scale(1.03);
+}
+
+.cardinal-car-photo-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Full-screen photo. Portalled to <body> (see `CarPhoto`), so this is genuinely viewport
+   -fixed rather than trapped inside the card's transformed stacking context. */
+.cardinal-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgb(0 0 0 / 88%);
+  cursor: zoom-out;
+  animation: lightbox-in 150ms ease;
+}
+
+@keyframes lightbox-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.cardinal-lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgb(0 0 0 / 50%);
+}
+
+.cardinal-lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--foreground);
+  cursor: pointer;
+  background: rgb(255 255 255 / 10%);
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 50%;
+}
+
+.cardinal-lightbox-close:hover {
+  background: rgb(255 255 255 / 20%);
+}
+
 /* PHASE-7: the MCP App host pane -- a slide-in panel rather than a third grid column, so it
    layers over the canvas without reflowing it (gate 7.8's "no layout shift in the surrounding
    A2UI surface" when its own container resizes). */
@@ -811,7 +853,7 @@ body {
   flex-direction: column;
   background: var(--bg-elevated);
   border-left: 1px solid var(--line);
-  box-shadow: -12px 0 40px rgb(0 0 0 / 0.35);
+  box-shadow: -12px 0 40px color-mix(in oklab, var(--foreground) 35%, transparent);
   z-index: 10;
   animation: slide-in 0.25s ease both;
 }
@@ -868,4 +910,1208 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   PLAN-02 P12 -- /login, the role toggle, and the seller-console placeholder.
+   The demo banner reuses --danger deliberately: it must read as a warning, not
+   as chrome (CONSTITUTION I.5, gate 12.2 asserts it above the fold).
+   --------------------------------------------------------------------------- */
+
+/* Two columns: the form persuades with words, the photograph persuades without them.
+   `minmax(0, 1fr) 620px` per the handoff. */
+.login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 620px;
+  align-items: stretch;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  color: var(--text);
+}
+
+.login-col {
+  min-width: 0;
+  /* Top padding used to come for free from the banner's own height; now the heading is the
+     first element, it needs breathing room of its own instead of sitting flush with the nav. */
+  padding: clamp(2rem, 6vw, 4.5rem) 0 4rem;
+}
+
+/* Everything in the wide column keeps a readable measure. */
+.login-col > * {
+  max-width: 34rem;
+  margin-inline: clamp(1.25rem, 5vw, 4rem);
+}
+
+.seller-console,
+.route-loading {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+  color: var(--text);
+}
+
+.login h1 {
+  margin: 0 0 2rem;
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 4.4vw, 3.5rem);
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+/* One track holding both options, active one filled -- the same pill-group idiom as the nav. */
+.role-toggle {
+  display: flex;
+  gap: 0.25rem;
+  width: fit-content;
+  margin-bottom: 2rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.07);
+}
+
+.role-toggle button {
+  flex: 0 0 auto;
+  padding: 0.6rem 1.25rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--pg-ink-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.role-toggle button.active {
+  background: var(--pg-primary-fill);
+  color: var(--pg-primary-ink);
+  font-weight: 500;
+}
+
+.role-toggle button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* Google's brand guidelines want their mark on a neutral surface with legible contrast and
+   the wordmark untranslated. A white button in dark mode would glare, so this follows the
+   app's own surface tokens and lets the mark supply the colour. */
+.google-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.google-button:hover:not(:disabled) {
+  border-color: var(--text-dim);
+}
+
+.google-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.google-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* A rule with the word sitting in the gap, rather than a bare "or" on its own line. */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.login-aside {
+  position: relative;
+  overflow: hidden;
+  background: var(--pg-chrome);
+}
+
+.login-aside picture,
+.login-aside img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.login-aside img {
+  object-fit: cover;
+  object-position: 50% 40%;
+}
+
+/* Bottom-anchored, over a gradient rather than a box -- the caption belongs to the photograph. */
+.login-aside-caption {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: clamp(28px, 4vw, 56px);
+  background: linear-gradient(180deg, rgb(6 18 16 / 0) 0%, rgb(6 18 16 / 0.82) 62%);
+  color: #ffffff;
+}
+
+.login-aside-eyebrow {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pg-mint);
+}
+
+.login-aside-caption p:last-child {
+  max-width: 22ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 2vw, 1.9rem);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+/* The photograph is the first thing to go: it is decorative, and at this width the form needs
+   every pixel. */
+@media (max-width: 900px) {
+  .login {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .login-aside {
+    display: none;
+  }
+}
+
+.login-lede {
+  margin: 0 0 1.5rem;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.login-form label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pg-ink-faint);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.login-form input,
+.login-form select {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+}
+
+/* The closed `<select>` box picks up `--bg-input`/`--text` from the rule above, but the popup
+   list is a separate rendering surface the browser paints itself -- Chromium and Firefox use
+   the OS's own opaque white unless `option` sets its own colours, `color` on the `<select>`
+   alone does not reach it. Without this, white text (from `--text`) landed on that unstyled
+   white popup and every option but the OS-highlighted one was invisible, not merely low
+   contrast. Solid colours only: gradients/opacity on `option` are unreliable cross-browser, and
+   invisible text is not a place to gamble on that. */
+.login-form select option {
+  background-color: var(--pg-chrome);
+  color: var(--text);
+}
+
+.login-form input:focus-visible,
+.login-form select:focus-visible,
+.role-toggle button:focus-visible,
+.login-form button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.login-form small {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.login-form .optional {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.login-form button[type="submit"] {
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent-deep);
+  color: var(--primary-foreground);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-form button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-form button.link {
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.login-error {
+  margin-top: 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.seller-console header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.seller-console header button {
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.placeholder-note {
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* PLAN-02 P13 -- dealer attribution + condition badge on the CarCard. */
+.cardinal-condition {
+  display: inline-block;
+  margin-bottom: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.cardinal-condition[data-condition="new"] {
+  background: var(--user-bubble);
+  color: var(--accent-deep);
+}
+.cardinal-condition[data-condition="certified_pre_owned"] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-deep);
+}
+.cardinal-dealer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.7rem;
+  align-items: baseline;
+  margin: 0.6rem 0 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.cardinal-dealer-name {
+  color: var(--text);
+  font-weight: 600;
+}
+.cardinal-dealer-rating {
+  color: var(--accent-deep);
+}
+.cardinal-dealer-verified[data-verified="yes"] {
+  color: var(--accent-deep);
+}
+.cardinal-dealer-verified[data-verified="no"] {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* PLAN-02 P14 -- cart badge, cart panel, payee disclosure. */
+
+.cardinal-add-to-cart {
+  margin-top: 0.7rem;
+  width: 100%;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--accent-deep);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-deep);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cardinal-add-to-cart:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.brand .cart-badge {
+  margin-left: auto;
+}
+.cart-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.cart-badge:hover {
+  color: var(--text);
+  border-color: var(--accent-deep);
+}
+.cart-badge-count {
+  min-width: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--accent-deep);
+  color: var(--primary-foreground);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.canvas-cart {
+  display: block;
+}
+
+.cart-panel {
+  max-width: 640px;
+  margin: 0 auto;
+}
+.cart-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+.cart-panel h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.cart-panel-count {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+.cart-empty {
+  padding: 1.1rem 1.2rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.cart-error {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.cart-line {
+  margin-bottom: 1rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+.cart-line[data-available="false"] {
+  border-color: var(--danger);
+}
+.cart-line-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.cart-line-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.cart-line-price {
+  flex: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.cart-line-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.7rem;
+  margin: 0.35rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Bordered and set apart rather than blended in: a disclosure that reads as decoration is a
+   disclosure nobody reads. Same treatment `checkout.html`'s `#payee` block gets, so the two
+   look like one statement made twice rather than two different claims. */
+.cart-payee {
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.cart-payee[data-flag="yes"] {
+  border-color: var(--danger);
+}
+.cart-payee h4 {
+  margin: 0 0 0.45rem;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cart-payee p {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+}
+.cart-payee-legal {
+  font-weight: 700;
+}
+.cart-payee-address,
+.cart-payee-phone {
+  color: var(--text-dim);
+}
+.cart-payee-status {
+  margin-top: 0.5rem !important;
+  font-weight: 600;
+}
+.cart-payee[data-flag="no"] .cart-payee-status {
+  color: var(--accent-deep);
+}
+.cart-payee[data-flag="yes"] .cart-payee-status,
+.cart-payee-unknown {
+  color: var(--danger);
+}
+
+.cart-line-unavailable {
+  margin: 0.8rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+.cart-line-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+.cart-line-checkout {
+  flex: 1;
+  padding: 0.6rem 0.9rem;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent-deep);
+  color: var(--primary-foreground);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cart-line-checkout:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.cart-line-remove {
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.cart-single-note {
+  margin: 1rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+/* PLAN-02 P15 -- the seller console: leads, tiers, "why this tier", analytics strip. */
+
+.seller-console {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+.seller-sub {
+  margin: 0.25rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+.seller-sub .dot {
+  margin-right: 0.4rem;
+}
+
+.seller-analytics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin: 1.4rem 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+.analytics-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+.analytics-counts strong {
+  color: var(--text);
+  font-size: 1.15rem;
+  margin-right: 0.3rem;
+}
+.analytics-days {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  height: 68px;
+}
+.analytics-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  height: 100%;
+}
+.analytics-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+  width: 16px;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.analytics-seg {
+  width: 100%;
+  min-height: 0;
+}
+.analytics-day-label {
+  color: var(--text-dim);
+  font-size: 0.62rem;
+}
+
+.tier-high { color: var(--pg-mint); }
+.tier-med { color: var(--cohere-coral); }
+.tier-low { color: var(--pg-ink-muted); }
+.analytics-seg.tier-high { background: var(--pg-mint); }
+.analytics-seg.tier-med { background: var(--cohere-coral); }
+/* Low is deliberately quiet: a tier that needs no action should not compete for attention. */
+.analytics-seg.tier-low { background: rgb(255 255 255 / 0.22); }
+
+.lead-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.lead-card {
+  padding: 1.2rem 1.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+}
+/* Tint the whole card rather than stripe its edge, and reserve the warm colour for the state
+   that is actually a problem. `--danger` is the coral now, so the old rule was painting the
+   tier a seller most wants to see in the colour that means "this has gone wrong". */
+.lead-card[data-tier="high"] {
+  border-color: rgb(127 214 189 / 0.35);
+  background: rgb(127 214 189 / 0.06);
+}
+.lead-card[data-tier="medium"] {
+  border-color: rgb(255 119 89 / 0.4);
+  background: rgb(255 119 89 / 0.05);
+}
+/* Low is deliberately unmarked: a tier that needs no action should not ask for attention. */
+.lead-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.lead-head h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.lead-tier {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.lead-sla {
+  flex: none;
+  padding: 0.3rem 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.08);
+  color: var(--pg-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+.lead-sla.overdue {
+  background: var(--cohere-coral);
+  color: var(--pg-primary-ink);
+  font-weight: 500;
+}
+.lead-explanation {
+  margin: 0.7rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.lead-guidance {
+  margin: 0.3rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.lead-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.7rem 1.2rem;
+  margin: 0.9rem 0 0;
+}
+.lead-facts dt {
+  color: var(--text-dim);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lead-facts dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.83rem;
+  line-height: 1.4;
+}
+
+.lead-why-toggle {
+  margin-top: 0.9rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--pg-border-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.lead-why-toggle:hover {
+  border-color: var(--pg-mint);
+  background: var(--pg-mint-soft);
+}
+.lead-why {
+  margin-top: 0.7rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.signal-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.signal-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 70px minmax(140px, 2fr) 54px;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.28rem 0;
+  font-size: 0.76rem;
+}
+.signal-name {
+  font-weight: 600;
+}
+.signal-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+  overflow: hidden;
+}
+.signal-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--pg-mint);
+}
+.signal-row[data-sign="negative"] .signal-fill {
+  background: var(--cohere-coral);
+}
+.signal-why {
+  color: var(--text-dim);
+}
+.signal-contribution {
+  color: var(--pg-mint);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  text-align: right;
+}
+.signal-total {
+  margin: 0.7rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.lead-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+.lead-state {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.lead-state.state-contacted {
+  color: var(--accent-deep);
+}
+.lead-contacted {
+  padding: 0.5rem 1.1rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--pg-primary-fill);
+  color: var(--pg-primary-ink);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.lead-contacted:hover {
+  background: color-mix(in oklab, var(--pg-primary-fill) 88%, var(--pg-mint));
+}
+.lead-listing-price {
+  font-weight: 600;
+}
+.lead-listing-gone {
+  color: var(--danger);
+  font-weight: 600;
+}
+.lead-listing-ref {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--text-dim);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.68rem;
+}
+
+/* PLAN-02 P16 -- voice controls in the composer area. */
+.voice-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.4rem 0.75rem 0;
+  font-size: 0.75rem;
+}
+.voice-controls button {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.voice-controls button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--user-bubble);
+  color: var(--text);
+}
+.voice-controls button:disabled { opacity: 0.55; cursor: default; }
+.voice-mic[data-recording="yes"] {
+  border-color: var(--danger);
+  color: var(--danger);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .voice-mic[data-recording="yes"] { animation: none; }
+}
+.voice-picker {
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.72rem;
+}
+/* Same fix as `.login-form select option` and `.ui-select option`: the popup list is a surface
+   the browser paints itself, and `color` on the closed `<select>` does not reach it. */
+.voice-picker option {
+  background-color: var(--bg-elevated);
+  color: var(--text);
+}
+.voice-tier {
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 0.66rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.voice-tier[data-tier="provider"] { color: var(--accent-deep); }
+.voice-tier[data-tier="text"] { color: var(--danger); }
+.voice-error { color: var(--danger); font-size: 0.7rem; }
+.voice-label { display: none; }
+@media (min-width: 480px) { .voice-label { display: inline; } }
+
+/* A refused "Add to cart", shown in the rail beside the card that was clicked. Sits directly
+   above the voice controls and composer so it lands in the eye-line of whoever just pressed
+   the button, rather than on the cart page they have not opened yet. */
+.cart-error {
+  margin: 0 1.25rem 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* ---------------------------------------------------------------------------
+   The shared site chrome. One header on every route, so the four pages read as
+   one product rather than four apps sharing a bundle.
+   --------------------------------------------------------------------------- */
+.site-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+/* Three zones -- brand left, menu centred, account right -- which is how Cohere's global nav is
+   built and how the configurator in the design brief is built. `grid`, not `flex`, so the pill
+   group is centred against the *header*, not against whatever the two side zones happen to
+   measure this render; with flex it would drift sideways every time the account name changed. */
+.site-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  flex-shrink: 0;
+  gap: var(--space-lg);
+  align-items: center;
+  padding: var(--space-md) clamp(16px, 3vw, 32px);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+.site-brand {
+  display: inline-flex;
+  gap: 0.6rem;
+  align-items: center;
+  justify-self: start;
+  color: var(--text);
+  text-decoration: none;
+}
+.site-brand-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  background: var(--pg-brand);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 500;
+  place-items: center;
+}
+.site-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.site-brand-name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: var(--tracking-heading);
+}
+.site-brand-sub {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+/* The pill group: one soft-stone track holding the links, active one filled near-black. */
+.site-nav {
+  display: flex;
+  gap: 0.15rem;
+  justify-self: center;
+  padding: 0.2rem;
+  border-radius: var(--radius-pill);
+  background: var(--secondary);
+}
+.site-nav a {
+  padding: 0.4rem 1rem;
+  border-radius: var(--radius-pill);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--transition), color var(--transition);
+}
+.site-nav a:hover { color: var(--text); }
+.site-nav a[aria-current="page"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.site-account {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  justify-self: end;
+  font-size: 0.82rem;
+}
+.site-account-name { color: var(--text-dim); }
+.site-signout {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition);
+}
+.site-signout:hover { color: var(--text); border-color: var(--text); }
+.site-signin {
+  padding: 0.45rem 1.1rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-deep);
+  color: var(--primary-foreground);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.site-header a:focus-visible,
+.site-signout:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+/* The chat/canvas layout sized itself against the viewport; it now shares the
+   height with the header, so it fills what is left instead of overflowing. */
+.site-shell > *:not(.site-header) { flex: 1; min-height: 0; }
+/* Below the tablet breakpoint the three zones stop fitting on one line. The nav keeps its pill
+   track and scrolls rather than collapsing behind a menu button -- there are at most three
+   links, and a hamburger hiding three links is chrome for its own sake. */
+@media (max-width: 860px) {
+  .site-header {
+    grid-template-columns: auto 1fr;
+    row-gap: var(--space-sm);
+  }
+  .site-nav {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .site-nav::-webkit-scrollbar { display: none; }
+}
+@media (max-width: 560px) {
+  .site-brand-text, .site-account-name { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Wide-viewport behaviour. The canvas keeps a readable measure and centres it,
+   instead of stretching a single card across an ultrawide monitor.
+   --------------------------------------------------------------------------- */
+.canvas > * {
+  width: 100%;
+  max-width: var(--canvas-max, 1100px);
+  margin-inline: auto;
+}
+/* The empty state has its own narrower measure already; don't fight it. */
+.canvas > .canvas-empty {
+  max-width: 380px;
+}
+
+
+/* ---------------------------------------------------------------------------
+   PADDOCK GREEN -- the empty canvas.
+
+   The idle canvas used to be a white rectangle with three shimmer bars. On a
+   dark ground it needs something to be dark *against*, so the hero photograph
+   returns here as texture at low opacity, and the three bars gain a phase strip
+   that says where the agent actually is. `PhaseStrip` in `App.tsx` derives that
+   from the same `phase` the ambient hue already follows -- no new state.
+   --------------------------------------------------------------------------- */
+.canvas-idle {
+  position: relative;
+  isolation: isolate;
+}
+.canvas-idle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(180deg, rgb(6 18 16 / 0.72) 0%, rgb(6 18 16 / 0.92) 100%),
+    url("/showroom/hero-paddock-1920.webp");
+  background-size: cover;
+  background-position: 62% 45%;
+  /* Texture, not subject: at 0.28 the car's own silhouette competed with the copy. */
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.canvas-empty {
+  max-width: 520px;
+}
+
+.canvas-empty h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.75rem);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.canvas-empty p {
+  font-size: 0.95rem;
+}
+
+.phase-bars {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.phase-bars span {
+  width: 56px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.2);
+  transition: background var(--transition);
+}
+
+.phase-bars span[data-state="done"] {
+  background: var(--pg-mint);
+}
+
+.phase-labels {
+  display: flex;
+  justify-content: center;
+  gap: clamp(0.75rem, 3vw, 2rem);
+  margin: 1.25rem 0 0;
+  padding: 1.25rem 0 0;
+  border-top: 1px solid var(--pg-border);
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.phase-labels li {
+  color: var(--pg-ink-faint);
+}
+.phase-labels li[data-state="done"] {
+  color: var(--pg-ink-muted);
+}
+.phase-labels li[data-state="current"] {
+  color: #ffffff;
 }

@@ -11,6 +11,7 @@
  * Not part of `make verify` or any gate: it needs a real key and spends real tokens (D-015).
  */
 import { test, expect } from "@playwright/test";
+import { signInAsBuyer } from "./helpers/signin";
 
 const SHOTS = "../shots";
 
@@ -21,7 +22,9 @@ test("live chat end to end", async ({ page }) => {
   });
   page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message}`));
 
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle" });
+  // The agent is at `/chat` and guarded (D-085); `/` is the public showroom.
+  await signInAsBuyer(page);
+  await page.waitForLoadState("networkidle");
   await page.screenshot({ path: `${SHOTS}/01-landing.png`, fullPage: true });
 
   const input = page.getByTestId("chat-input");

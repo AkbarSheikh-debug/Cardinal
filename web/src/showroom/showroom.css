@@ -1,0 +1,493 @@
+/**
+ * The showroom's stylesheet — Paddock Green.
+ *
+ * Owns layout and page-specific surfaces only. Every colour comes from `../ui/tokens.css`;
+ * every control from `../ui/ui.css`. A raw hex here is a bug, with one deliberate exception:
+ * the gradient scrim, whose stops are photographic rather than semantic and are quoted from the
+ * handoff verbatim so they can be checked against it.
+ */
+
+.showroom {
+  --showroom-gutter: clamp(20px, 5vw, 72px);
+  --showroom-max: 1480px;
+  background: var(--pg-bg);
+  color: #ffffff;
+}
+
+/* ---- the photographic stage ---------------------------------------------------------------
+   Three layers: photograph, scrim, content. The photograph is a real `<img>` (alt text,
+   responsive selection) rather than a background-image, so the scrim has to be its own element
+   above it instead of a second background layer. */
+
+.showroom-stage {
+  position: relative;
+  isolation: isolate;
+  min-height: min(800px, 82vh);
+  display: flex;
+  overflow: hidden;
+}
+
+.showroom-photo,
+.showroom-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.showroom-photo img {
+  object-fit: cover;
+  /* The car sits right-of-centre in the frame; anchoring right keeps it in shot when the
+     viewport is narrower than the photograph's 2.4:1 band. */
+  object-position: 72% 50%;
+}
+
+/* Quoted from the handoff. Dark enough on the left for 17px body copy to clear AA, clearing to
+   almost nothing by 62% so the car is never veiled, then a slight return at the right edge to
+   stop the bright paddock tent burning out the corner. */
+.showroom-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    rgb(6 18 16 / 0.92) 0%,
+    rgb(6 18 16 / 0.72) 34%,
+    rgb(6 18 16 / 0.1) 62%,
+    rgb(6 18 16 / 0.35) 100%
+  );
+}
+
+.showroom-stage-inner {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-xxl);
+  width: 100%;
+  max-width: var(--showroom-max);
+  margin-inline: auto;
+  padding: clamp(40px, 6vw, 70px) var(--showroom-gutter) 0;
+}
+
+/* ---- text column --------------------------------------------------------------------------- */
+
+.showroom-lede {
+  max-width: 560px;
+}
+
+.showroom-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pg-mint);
+}
+
+.showroom-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--pg-ink-muted);
+  background: transparent;
+  border: 1px solid var(--pg-border-strong);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    color var(--transition);
+}
+
+.showroom-info:hover,
+.showroom-info[aria-expanded="true"] {
+  color: var(--pg-primary-ink);
+  background: var(--pg-mint);
+  border-color: var(--pg-mint);
+}
+
+.showroom-display {
+  display: flex;
+  flex-direction: column;
+  margin: clamp(14px, 2vw, 22px) 0 0;
+  font-family: var(--font-display);
+  /* 104px at the top end, per the handoff. */
+  font-size: clamp(2.75rem, 7.6vw, 6.5rem);
+  font-weight: 400;
+  line-height: 0.88;
+  letter-spacing: -0.04em;
+  color: #ffffff;
+}
+
+.showroom-provenance {
+  max-width: 46ch;
+  margin-top: var(--space-lg);
+  padding: var(--space-lg);
+  background: rgb(0 0 0 / 0.45);
+  border: 1px solid var(--pg-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  color: var(--pg-ink-muted);
+  backdrop-filter: blur(8px);
+}
+
+.showroom-provenance p {
+  margin: 0;
+}
+
+.showroom-blurb {
+  /* ~38 characters, per the handoff — the measure is what keeps the column off the car. */
+  max-width: 38ch;
+  margin: clamp(18px, 2.5vw, 28px) 0 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--pg-ink-muted);
+}
+
+.showroom-price {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(24px, 4vw, 52px);
+  margin-top: clamp(24px, 3.5vw, 40px);
+}
+
+.showroom-price-label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pg-ink-faint);
+}
+
+.showroom-price-value {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.4vw, 2.875rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+}
+
+.showroom-price-monthly {
+  margin: 6px 0 0;
+  font-size: 17px;
+  color: var(--pg-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.showroom-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-top: clamp(24px, 3.5vw, 38px);
+}
+
+/* ---- bottom detail rail ---------------------------------------------------------------------
+   Overlaid on the image, not below it: the hairline is the bottom edge of the photograph's
+   information, and moving it out of the frame would turn it into a caption. */
+
+.showroom-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding: var(--space-lg) 0 clamp(20px, 3vw, 30px);
+  border-top: 1px solid rgb(255 255 255 / 0.18);
+}
+
+.showroom-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(18px, 3vw, 46px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.showroom-specs li {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pg-ink-muted);
+}
+
+.showroom-seller {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 6px 14px 6px 6px;
+  background: rgb(255 255 255 / 0.1);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.showroom-seller-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--pg-mint);
+  color: var(--pg-primary-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ---- capabilities ---------------------------------------------------------------------------- */
+
+.showroom-capabilities {
+  max-width: var(--showroom-max);
+  margin-inline: auto;
+  padding: clamp(56px, 8vw, 104px) var(--showroom-gutter) clamp(48px, 7vw, var(--space-section));
+}
+
+.showroom-section-head h2 {
+  max-width: 20ch;
+  margin: var(--space-md) 0 0;
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  font-weight: 400;
+  letter-spacing: var(--tracking-display);
+  color: #ffffff;
+}
+
+.showroom-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: clamp(24px, 3vw, 48px);
+  margin: clamp(32px, 4vw, 56px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Top rule only, no box. */
+.showroom-capability {
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--pg-border-strong);
+  color: var(--pg-mint);
+}
+
+.showroom-capability h3 {
+  margin: var(--space-lg) 0 var(--space-md);
+  font-size: var(--text-feature);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: #ffffff;
+}
+
+.showroom-capability p {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--pg-ink-muted);
+}
+
+/* ---- trust band ------------------------------------------------------------------------------- */
+
+.showroom-band {
+  padding: 0 var(--showroom-gutter) clamp(48px, 7vw, var(--space-section));
+}
+
+.showroom-band-inner {
+  max-width: var(--showroom-max);
+  margin-inline: auto;
+  padding: clamp(40px, 6vw, var(--space-section));
+  background: var(--pg-chrome);
+  border: 1px solid var(--pg-border);
+  color: #ffffff;
+  border-radius: var(--radius-lg);
+}
+
+.showroom-band-eyebrow {
+  color: var(--pg-mint);
+}
+
+.showroom-band-inner h2 {
+  max-width: 22ch;
+  margin: var(--space-lg) 0 var(--space-lg);
+  font-family: var(--font-display);
+  font-size: var(--text-section);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: var(--tracking-display);
+}
+
+.showroom-band-inner > p {
+  max-width: 62ch;
+  margin: 0;
+  font-size: var(--text-body-lg);
+  line-height: 1.5;
+  color: var(--pg-ink-muted);
+}
+
+.showroom-band-rule {
+  margin: clamp(32px, 4vw, 56px) 0 clamp(24px, 3vw, 40px);
+  background: var(--pg-border);
+}
+
+.showroom-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-xl);
+  margin: 0;
+}
+
+.showroom-stats dt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pg-ink-faint);
+}
+
+.showroom-stats dd {
+  margin: var(--space-sm) 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.4vw, 3rem);
+  line-height: 1;
+  letter-spacing: var(--tracking-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--pg-mint);
+}
+
+.showroom-stats-note {
+  margin: var(--space-xl) 0 0;
+  font-size: var(--text-micro);
+  color: var(--pg-ink-faint);
+}
+
+/* ---- footer ------------------------------------------------------------------------------------ */
+
+.showroom-footer {
+  padding: clamp(40px, 5vw, 64px) var(--showroom-gutter);
+  background: var(--pg-chrome);
+  border-top: 1px solid var(--pg-border);
+  color: #ffffff;
+}
+
+.showroom-footer .ui-separator {
+  max-width: var(--showroom-max);
+  margin: clamp(28px, 4vw, 48px) auto;
+  background: var(--pg-border);
+}
+
+.showroom-footer-inner,
+.showroom-footer-fine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xl);
+  justify-content: space-between;
+  max-width: var(--showroom-max);
+  margin-inline: auto;
+}
+
+.showroom-footer-mark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-feature);
+  letter-spacing: var(--tracking-heading);
+}
+
+.showroom-footer-tag {
+  max-width: 46ch;
+  margin: var(--space-md) 0 0;
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  color: var(--pg-ink-muted);
+}
+
+.showroom-footer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.showroom-footer-nav a {
+  font-size: var(--text-caption);
+  color: var(--pg-ink-muted);
+  text-decoration: none;
+}
+
+.showroom-footer-nav a:hover {
+  color: var(--pg-mint);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.showroom-footer-fine p {
+  margin: 0;
+  font-size: var(--text-micro);
+  color: var(--pg-ink-faint);
+}
+
+/* ---- responsive ---------------------------------------------------------------------------------
+   The scrim is the thing that has to change, not the layout. Below the tablet breakpoint the
+   text column occupies most of the width, so a left-to-right gradient no longer protects it —
+   it becomes a vertical one and the car reads through the top instead of the right. */
+
+@media (max-width: 900px) {
+  .showroom-stage {
+    min-height: 0;
+  }
+
+  .showroom-scrim {
+    background: linear-gradient(
+      180deg,
+      rgb(6 18 16 / 0.45) 0%,
+      rgb(6 18 16 / 0.72) 42%,
+      rgb(6 18 16 / 0.94) 100%
+    );
+  }
+
+  .showroom-photo img {
+    object-position: 62% 42%;
+  }
+
+  .showroom-stage-inner {
+    padding-top: clamp(160px, 34vw, 260px);
+  }
+
+  .showroom-lede {
+    max-width: none;
+  }
+
+  .showroom-blurb {
+    max-width: 46ch;
+  }
+}
+
+@media (max-width: 560px) {
+  .showroom-cta {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .showroom-rail {
+    align-items: flex-start;
+  }
+
+  .showroom-footer-inner {
+    flex-direction: column;
+  }
+}

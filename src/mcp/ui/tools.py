@@ -15,6 +15,7 @@ from typing import Any
 
 from claude_agent_sdk import tool
 
+from src.adapters.dealer_store import DealerDirectory
 from src.adapters.store import ListingStore
 from src.domain.enums import TimingMechanism
 from src.domain.listing import Listing, ListingSummary
@@ -36,6 +37,7 @@ from src.mcp.ui.validate import validate_component_tree
 from src.mcp.ui.vehicle_models import (
     is_representative,
     vehicle_model_src,
+    vehicle_photo_src,
     vehicle_poster_src,
 )
 
@@ -87,7 +89,9 @@ def _powertrain_props(
 
 
 async def _card_visuals(
-    store: ListingStore | None, args: dict[str, Any]
+    store: ListingStore | None,
+    args: dict[str, Any],
+    dealers: DealerDirectory | None = None,
 ) -> dict[tuple[str, str], CardVisual]:
     """Resolves each ranked item to its headline and 3D asset (D-060), so the compiler stays
     a pure function of primitives and this module keeps the I/O.
@@ -105,11 +109,26 @@ async def _card_visuals(
         listing = await store.fetch(source, source_id)
         if listing is None:
             continue
+        # PLAN-02 P13. Best-effort in exactly the same way the 3D asset lookup is: no
+        # directory wired, or a listing that predates the P13 re-seed, yields a card with no
+        # attribution rather than an error or a half-rendered "Sold by".
+        dealer = None
+        if dealers is not None and listing.dealer_id is not None:
+            dealer = await dealers.get(listing.dealer_id)
+
         visuals[(source, source_id)] = CardVisual(
             headline=ListingSummary.from_listing(listing).headline,
             model_src=vehicle_model_src(listing.brand, listing.model, listing.category),
             poster_src=vehicle_poster_src(listing.brand, listing.model, listing.category),
             representative=is_representative(listing.brand, listing.model),
+            photo_src=vehicle_photo_src(listing.brand, listing.model),
+            condition=listing.condition.value,
+            # PLAN-02 P14: read off the listing, never assumed -- see `CardVisual.offer_type`.
+            offer_type=listing.offer_type.value,
+            dealer_name=dealer.display_name if dealer else None,
+            dealer_city=dealer.city if dealer else None,
+            dealer_rating=float(dealer.rating) if dealer else None,
+            dealer_verified=dealer.is_verified if dealer else None,
         )
     return visuals
 
@@ -134,6 +153,7 @@ def build_tool_specs(
     sink: UISink | None = None,
     registry: SurfaceRegistry | None = None,
     store: ListingStore | None = None,
+    dealers: DealerDirectory | None = None,
     phase: Callable[[], str] | None = None,
 ) -> list[ToolSpec]:
     """`session_id`/`sink`/`registry` are what gate 6.6's surface-identity guarantee runs on;
@@ -210,7 +230,7 @@ def build_tool_specs(
         ),
     )
     async def render_results(args: dict[str, Any]) -> dict[str, Any]:
-        compiled = compile_results_surface(args, visuals=await _card_visuals(store, args))
+        compiled = compile_results_surface(args, visuals=await _card_visuals(store, args, dealers))
         await sink.push(to_messages(session_id, compiled, registry))
         return _text_result(f"Rendered {len(args.get('items', []))} results.")
 

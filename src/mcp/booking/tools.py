@@ -20,6 +20,7 @@ from typing import Any
 from claude_agent_sdk import tool
 
 from src.adapters.booking_store import BookingStore, InMemoryBookingStore, session_ref_to_uuid
+from src.adapters.dealer_store import DealerDirectory
 from src.adapters.payments.mock import MockPaymentGateway
 from src.adapters.payments.protocol import PaymentGateway
 from src.adapters.protocol import ListingNotFoundError, QuoteNotAvailableError
@@ -86,6 +87,53 @@ def _text_result(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _error_result(message: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": message}], "is_error": True}
+
+
+async def _payee_fields(
+    store: ListingStore,
+    dealers: DealerDirectory | None,
+    form_fields: dict[str, Any],
+) -> dict[str, Any]:
+    """The payee block the checkout App renders above its pay button (PLAN-02 P14).
+
+    Resolved from the *listing's* dealer, server-side. Two failure modes both resolve to an
+    explicit "unknown" rather than to silence, because a checkout that simply omits the block
+    reads as "there is nothing to say here":
+
+    - no dealer directory wired (a bare `build_tool_specs()` in a unit test), or
+    - a listing whose `dealer_id` predates P13's re-seed.
+
+    `payee_needs_flag` defaults to `True` in both cases. Erring toward the caution is the
+    only safe direction for a disclosure: an unverified payee shown as verified is a lie the
+    system told, while a verified one shown as unconfirmed is merely unhelpful.
+    """
+    unknown = {
+        "payee_known": False,
+        "payee_needs_flag": True,
+        "payee_verification": "unverified",
+    }
+    if dealers is None:
+        return unknown
+    source, source_id = form_fields.get("source"), form_fields.get("source_id")
+    if not source or not source_id:
+        return unknown
+    listing = await store.fetch(str(source), str(source_id))
+    if listing is None:
+        return unknown
+    payee = await dealers.payee(listing.dealer_id)
+    if payee is None:
+        return unknown
+    return {
+        "payee_known": True,
+        "payee_legal_name": payee.legal_name,
+        "payee_display_name": payee.display_name,
+        "payee_address": payee.address,
+        "payee_city": payee.city,
+        "payee_country": payee.country,
+        "payee_phone": payee.phone,
+        "payee_verification": payee.verification_status.value,
+        "payee_needs_flag": payee.needs_flag,
+    }
 
 
 async def _price_draft(store: ListingStore, form_fields: dict[str, Any]) -> tuple[uuid.UUID, Quote]:
@@ -203,6 +251,7 @@ def build_tool_specs(
     session_id: str = "unbound",
     sink: UISink | None = None,
     store: ListingStore | None = None,
+    dealers: DealerDirectory | None = None,
     booking_store: BookingStore | None = None,
     payment_gateway: PaymentGateway | None = None,
 ) -> list[ToolSpec]:
@@ -211,6 +260,10 @@ def build_tool_specs(
     #: comment on `_default_booking_store` for why a per-call instance would silently break
     #: the gesture-token/idempotency flow across separate requests.
     active_store: ListingStore = store if store is not None else _default_listing_store
+    #: PLAN-02 P14. `None` is a supported state, not an oversight: a bare
+    #: `build_tool_specs()` in a unit test has no directory, and `_payee_fields` answers
+    #: "unknown, flag it" rather than omitting the block.
+    active_dealers: DealerDirectory | None = dealers
     active_bookings: BookingStore = (
         booking_store if booking_store is not None else _default_booking_store
     )
@@ -302,6 +355,11 @@ def build_tool_specs(
             "window_start": form_fields.get("window_start"),
             "window_end": form_fields.get("window_end"),
         }
+        # PLAN-02 P14 / proposal doc #8: who receives this money. Resolved server-side from
+        # the listing's own dealer -- never read from the draft, which the view supplied and
+        # could therefore name any payee it liked. A disclosure the payer can forge is worse
+        # than none, because it looks like a guarantee.
+        tool_input.update(await _payee_fields(active_store, active_dealers, form_fields))
         await active_sink.push(
             [
                 {

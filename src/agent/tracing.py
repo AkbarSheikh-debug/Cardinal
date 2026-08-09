@@ -66,14 +66,24 @@ _ATTRIBUTE_SCALAR_TYPES = (str, bool, int, float)
 
 #: Key-shaped signal: a field whose *name* says it carries personal data, whatever its value
 #: looks like syntactically (a bare "John Smith" has no regex signature an email/phone has).
-_PII_KEY_RE = re.compile(r"(email|phone|address|full_?name|card_?number|ssn|passport)", re.I)
+#: `income`/`salary`/`employer` joined this list with PLAN-02 P12 (§0.3): `annual_income` is
+#: the most sensitive field the system collects, and `income_band` -- while coarse -- is
+#: still a financial fact about a named person once it sits next to their email in a trace.
+#: `employer` is free text the buyer typed, so it can carry anything at all.
+_PII_KEY_RE = re.compile(
+    r"(email|phone|address|full_?name|card_?number|ssn|passport|income|salary|employer)", re.I
+)
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[A-Za-z]{2,}")
 _PHONE_RE = re.compile(r"(?<!\d)(?:\+\d{1,3}[\s-]?)?(?:\d[\s-]?){7,14}\d(?!\d)")
 
 
 def _redact_scalar(key: str, value: AttributeValue) -> AttributeValue:
     if not isinstance(value, str):
-        return value
+        # A key-shaped match still redacts a non-string: an income attached as a bare number
+        # is exactly as identifying as one attached as text, and returning it untouched
+        # because it happened not to be a `str` is the kind of gap that only shows up in a
+        # trace nobody reads until it matters.
+        return f"pii:<redacted:{type(value).__name__}>" if _PII_KEY_RE.search(key) else value
     if _EMAIL_RE.search(value):
         return f"email:<redacted:{len(value)}>"
     if _PHONE_RE.search(value):

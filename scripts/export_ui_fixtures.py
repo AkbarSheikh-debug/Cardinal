@@ -55,26 +55,79 @@ def main() -> int:
     _write("progress.json", to_messages(session_id, progress, registry))
 
     registry = SurfaceRegistry()
+    # PLAN-02 P13: real listings and their real dealers, so the fixture carries the dealer
+    # attribution a live `render_results` would emit rather than a card shape that stopped
+    # matching the compiler two phases ago. Gate 13.5 asserts these props render.
+    from src.adapters.catalogue.dealers import generate_dealers
+    from src.adapters.catalogue.generator import SOURCES, generate_catalogue
+    from src.domain.listing import ListingSummary
+    from src.mcp.ui.compiler import CardVisual
+    from src.mcp.ui.vehicle_models import (
+        is_representative,
+        vehicle_model_src,
+        vehicle_photo_src,
+        vehicle_poster_src,
+    )
+
+    catalogue = generate_catalogue()
+    dealers_by_id = {d.id: d for d in generate_dealers(42, SOURCES)}
+
+    # One from each marketplace, and deliberately one verified dealer *and* one unverified
+    # one, so both branches of the card's trust badge live in a golden fixture rather than
+    # only in theory -- the same reasoning PHASE-8 §5 gives for deterministic payment
+    # failure injection. Gate 13.5 asserts both render.
+    def _pick(source: str, *, verified: bool):
+        return next(
+            x
+            for x in catalogue
+            if x.source == source
+            and x.dealer_id is not None
+            and dealers_by_id[x.dealer_id].is_verified is verified
+        )
+
+    first = _pick("mock_autobazaar", verified=True)
+    second = _pick("mock_drivenow", verified=False)
+
+    def _visual(listing: object) -> CardVisual:
+        dealer = dealers_by_id[listing.dealer_id]  # type: ignore[attr-defined]
+        return CardVisual(
+            headline=ListingSummary.from_listing(listing).headline,  # type: ignore[arg-type]
+            model_src=vehicle_model_src(listing.brand, listing.model, listing.category),  # type: ignore[attr-defined]
+            poster_src=vehicle_poster_src(listing.brand, listing.model, listing.category),  # type: ignore[attr-defined]
+            representative=is_representative(listing.brand, listing.model),  # type: ignore[attr-defined]
+            photo_src=vehicle_photo_src(listing.brand, listing.model),  # type: ignore[attr-defined]
+            condition=listing.condition.value,  # type: ignore[attr-defined]
+            offer_type=listing.offer_type.value,  # type: ignore[attr-defined]
+            dealer_name=dealer.display_name,
+            dealer_city=dealer.city,
+            dealer_rating=float(dealer.rating),
+            dealer_verified=dealer.is_verified,
+        )
+
     results = compile_results_surface(
         {
             "weights": {"budget_fit": 0.25, "resale_strength": 0.3},
             "items": [
                 {
-                    "source": "mock_autobazaar",
-                    "source_id": "AB-1073",
+                    "source": first.source,
+                    "source_id": first.source_id,
                     "rank": 1,
                     "score": 0.87,
                     "rationale": "Holds 80% of its value over the pricing horizon.",
                 },
                 {
-                    "source": "mock_drivenow",
-                    "source_id": "DN-0421",
+                    "source": second.source,
+                    "source_id": second.source_id,
                     "rank": 2,
                     "score": 0.79,
                     "rationale": "Priced within the stated budget with low mileage.",
                 },
             ],
-        }
+        },
+        visuals={
+            (first.source, first.source_id): _visual(first),
+            (second.source, second.source_id): _visual(second),
+        },
     )
     _write("results.json", to_messages(session_id, results, registry))
 

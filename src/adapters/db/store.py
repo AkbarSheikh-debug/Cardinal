@@ -80,6 +80,9 @@ def _conditions(q: SearchQuery, sources: Sequence[str]) -> list[ColumnElement[bo
         # Case-insensitive, matching the Python predicate.
         conditions.append(func.lower(ListingRow.brand).in_([b.casefold() for b in q.brands]))
 
+    if q.conditions:
+        conditions.append(ListingRow.condition.in_([c.value for c in q.conditions]))
+
     if q.fuel_types:
         conditions.append(ListingRow.fuel_type.in_([f.value for f in q.fuel_types]))
 

@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch cancels the first -- CI should report the tip, not a queue.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: lint · typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      # Mirrors `make lint` / `make typecheck` / `make test`. Kept as explicit steps rather
+      # than `make verify` so a red run names which of the three failed without opening logs.
+      - name: Lint (ruff)
+        run: |
+          python -m ruff check src tests scripts
+          python -m ruff format --check src tests scripts
+
+      - name: Typecheck (mypy)
+        run: |
+          python -m mypy --strict src/domain
+          python -m mypy src/agent src/adapters src/api src/mcp
+
+      # CARDINAL_DATABASE_URL is deliberately unset: the API serves the generated catalogue
+      # from memory, and the `postgres` marker skips the DB-backed tests. The phase gates
+      # (`make gates`) are not run here -- several need Playwright browsers and a live stack,
+      # and CONSTITUTION III.1 wants their real output pasted into PROGRESS.md by a human.
+      - name: Test (pytest)
+        run: python -m pytest tests -q
+
+  frontend:
+    name: web typecheck · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

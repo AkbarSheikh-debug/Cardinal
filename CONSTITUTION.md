@@ -37,10 +37,21 @@ ranking, so an injected instruction cannot move a result.
 *Enforced by:* ~30-case injection corpus with zero permitted successes — gates 10.1, 10.2, 10.4.
 
 **I.5 — The mock is honest about being a mock.**
-`MOCK — NO REAL PAYMENT` renders unconditionally and above the fold. Synthetic inventory is
-disclosed in the README and in any published MCP registry manifest. Archetype 3D assets standing in
-for a specific vehicle are labelled "representative image."
-*Enforced by:* gate 8.10 + README review in gate 11.8.
+Synthetic inventory is disclosed in the README and in any published MCP registry manifest.
+Archetype 3D assets standing in for a specific vehicle are labelled "representative image."
+
+*Revised by D-091.* This clause originally required `MOCK — NO REAL PAYMENT` to render
+unconditionally and above the fold on the checkout form, and an equivalent `DEMO AUTH` banner
+on `/login`. Both were removed from the running UI at the product owner's explicit request, made
+and reaffirmed after being told what it would cost — gate 8.10 no longer has a banner to check,
+and CONSTITUTION I.5 no longer requires one. The underlying facts did not change and are not
+hidden: `POST /auth/request-otp` still returns the banner text and the demo codes in its JSON
+body (gate 12.10), the checkout resource's own MCP description still reads "MOCK -- NO REAL
+PAYMENT" for any client or maintainer who inspects it, and this file and `DECISIONS.md` still
+say so in plain language. What changed is only that a person looking at the page no longer sees
+it stated there.
+*Enforced by:* gate 12.10 (API honesty) + README review in gate 11.8. Gates 8.10 and 12.2 now
+assert the removal was deliberate rather than a banner that no longer exists.
 
 ---
 
